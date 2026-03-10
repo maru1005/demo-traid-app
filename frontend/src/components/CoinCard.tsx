@@ -3,7 +3,9 @@
 
 import { useState } from "react";
 import Image from "next/image"; // Next.jsの最適化画像コンポーネント
-import { Coin } from '@/types/coin';
+import { Coin } from "@/types/coin";
+import { buildApiUrl, type GetAnalyzeResponse } from "@/types/api";
+import { API_BASE_URL } from "@/lib/config";
 
 interface CoinCardProps {
   coin: Coin;
@@ -16,12 +18,17 @@ export default function CoinCard({ coin }: CoinCardProps) {
   const handleAnalyze = async () => {
     if (loading) return;
     setLoading(true);
-    
+
     try {
-      // Goバックエンドへのリクエスト
-      const url = `http://localhost:8080/api/analyze?name=${coin.name}&price=${coin.current_price}&change=${coin.price_change_percentage_24h}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const api = buildApiUrl(API_BASE_URL);
+      const response = await fetch(
+        api.analyze({
+          name: coin.name,
+          price: coin.current_price,
+          change: coin.price_change_percentage_24h,
+        }),
+      );
+      const data: GetAnalyzeResponse = await response.json();
       setAnalysis(data.analysis);
     } catch (error) {
       console.error("Analysis Error:", error);
