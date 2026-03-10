@@ -39,7 +39,7 @@ func Connect() {
 
 	// モデルの自動マイグレーション
 	// models/coin.go を書き換えるだけでDBのテーブルが自動更新
-	err = db.AutoMigrate(&models.Coin{})
+	err = db.AutoMigrate(&models.Coin{}, &models.User{}, &models.Trade{}, &models.Holding{})
 	if err != nil {
 		log.Fatalf("❌ マイグレーション失敗: %v", err)
 	}
