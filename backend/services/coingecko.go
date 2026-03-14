@@ -70,6 +70,41 @@ func fetchAndStoreCoins() error {
 	return nil
 }
 
+// FetchCurrentPrices は複数コインの現在価格をCoinGeckoから一括取得します
+// coinIDs: ["bitcoin", "ethereum", ...]
+// 戻り値: map[coin_id]current_price
+func FetchCurrentPrices(coinIDs []string) (map[string]float64, error) {
+	ids := ""
+	for i, id := range coinIDs {
+		if i > 0 {
+			ids += ","
+		}
+		ids += id
+	}
+	url := fmt.Sprintf(
+		"https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=jpy",
+		ids,
+	)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// レスポンス例: {"bitcoin":{"jpy":9000000}, "ethereum":{"jpy":400000}}
+	var result map[string]map[string]float64
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	prices := make(map[string]float64)
+	for coinID, currencies := range result {
+		prices[coinID] = currencies["jpy"]
+	}
+	return prices, nil
+}
+
 // FetchPriceHistory はCoinGeckoから価格履歴を取得します
 // days: 1(24時間), 7(7日間), 365(1年間)
 func FetchPriceHistory(coinID string, days int) ([]map[string]interface{}, error) {

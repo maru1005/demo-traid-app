@@ -24,6 +24,7 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/trade/buy", handlers.BuyCoin)
 		api.POST("/trade/sell", handlers.SellCoin)
 		api.GET("/holdings", handlers.GetHoldings)
+		api.GET("/holdings/pnl", handlers.GetHoldingsPnL)
 		api.GET("/trades", handlers.GetTrades)
 	}
 }

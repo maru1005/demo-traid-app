@@ -5,3 +5,4 @@
 
 export * from "./coin";
 export * from "./api";
+export * from "./trade";

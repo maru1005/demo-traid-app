@@ -4,31 +4,22 @@
 import { useEffect, useState, useCallback } from "react";
 import { AlertCircle } from "lucide-react";
 import Image from "next/image";
-import { Coin } from "@/types/coin";
+import { Coin, User, HoldingPnL } from "@/types";
 import { API_BASE_URL } from "@/lib/config";
-
-interface Holding {
-  id: number;
-  coin_id: string;
-  coin_name: string;
-  amount: number;
-  avg_price: number;
-}
-
-interface User {
-  id: number;
-  balance: number;
-}
 
 export default function TradePage() {
   const [coins, setCoins] = useState<Coin[]>([]);
   const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
-  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [holdingsPnL, setHoldingsPnL] = useState<HoldingPnL[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  // 資金追加用
+  const [depositAmount, setDepositAmount] = useState("");
+  const [showDeposit, setShowDeposit] = useState(false);
 
   // 初期残高設定用
   const [initBalance, setInitBalance] = useState("");
@@ -52,17 +43,31 @@ export default function TradePage() {
     if (data.length > 0) setSelectedCoin(data[0]);
   }, []);
 
-  const fetchHoldings = useCallback(async () => {
-    const res = await fetch(`${API_BASE_URL}/api/holdings`);
+  const fetchHoldingsPnL = useCallback(async () => {
+    const res = await fetch(`${API_BASE_URL}/api/holdings/pnl`);
     const data = await res.json();
-    setHoldings(data);
+    setHoldingsPnL(data);
   }, []);
 
   useEffect(() => {
     fetchUser();
     fetchCoins();
-    fetchHoldings();
-  }, [fetchUser, fetchCoins, fetchHoldings]);
+    fetchHoldingsPnL();
+  }, [fetchUser, fetchCoins, fetchHoldingsPnL]);
+
+  const handleDeposit = async () => {
+    if (!depositAmount) return;
+    const res = await fetch(`${API_BASE_URL}/api/user/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: parseFloat(depositAmount) }),
+    });
+    if (res.ok) {
+      setDepositAmount("");
+      setShowDeposit(false);
+      fetchUser();
+    }
+  };
 
   const handleInit = async () => {
     const res = await fetch(`${API_BASE_URL}/api/user/init`, {
@@ -99,7 +104,7 @@ export default function TradePage() {
         setMessage(data.message);
         setAmount("");
         fetchUser();
-        fetchHoldings();
+        fetchHoldingsPnL();
       }
     } catch {
       setError("通信エラーが発生しました");
@@ -146,12 +151,40 @@ export default function TradePage() {
 
         {/* 残高表示 */}
         {user && (
-          <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
-            <p className="text-indigo-100 text-sm font-bold">利用可能残高</p>
-            <p className="text-4xl font-black mt-1">
-              ¥{user.balance.toLocaleString()}
-            </p>
-          </div>
+          <>
+            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
+              <p className="text-indigo-100 text-sm font-bold">利用可能残高</p>
+              <p className="text-4xl font-black mt-1">
+                ¥{user.balance.toLocaleString()}
+              </p>
+              <button
+                onClick={() => setShowDeposit((v) => !v)}
+                className="mt-4 text-xs font-bold text-indigo-200 hover:text-white transition-colors"
+              >
+                {showDeposit ? "▲ 閉じる" : "＋ 資金を追加する"}
+              </button>
+            </div>
+
+            {/* 資金追加フォーム */}
+            {showDeposit && (
+              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
+                <h2 className="font-bold text-gray-900">資金を追加</h2>
+                <input
+                  type="number"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="例: 100000"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={handleDeposit}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                >
+                  追加する
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* トレードフォーム */}
@@ -252,26 +285,51 @@ export default function TradePage() {
           </div>
         )}
 
-        {/* 保有残高 */}
-        {holdings.length > 0 && (
+        {/* 保有残高・損益 */}
+        {holdingsPnL.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
-            <h2 className="font-bold text-gray-900">保有残高</h2>
-            {holdings.map((h) => (
-              <div
-                key={h.id}
-                className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"
-              >
-                <div>
-                  <p className="font-bold text-gray-900">{h.coin_name}</p>
-                  <p className="text-xs text-gray-500">
-                    平均取得価格 ¥{h.avg_price.toLocaleString()}
-                  </p>
+            <h2 className="font-bold text-gray-900">保有残高・損益</h2>
+            {holdingsPnL.map((h) => {
+              const isProfit = h.pnl >= 0;
+              return (
+                <div
+                  key={h.coin_id}
+                  className="p-4 bg-gray-50 rounded-xl space-y-2"
+                >
+                  <div className="flex justify-between items-center">
+                    <p className="font-bold text-gray-900">{h.coin_name}</p>
+                    <p className="font-mono font-bold text-gray-900">
+                      {h.amount}枚
+                    </p>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>取得単価 ¥{h.avg_price.toLocaleString()}</span>
+                    <span>現在 ¥{h.current_price.toLocaleString()}</span>
+                  </div>
+                  <div
+                    className={`flex justify-between items-center pt-1 border-t ${isProfit ? "border-emerald-100" : "border-rose-100"}`}
+                  >
+                    <span className="text-xs font-bold text-gray-500">
+                      損益
+                    </span>
+                    <div className="text-right">
+                      <p
+                        className={`font-black text-sm ${isProfit ? "text-emerald-600" : "text-rose-500"}`}
+                      >
+                        {isProfit ? "+" : ""}¥
+                        {Math.round(h.pnl).toLocaleString()}
+                      </p>
+                      <p
+                        className={`text-xs font-bold ${isProfit ? "text-emerald-500" : "text-rose-400"}`}
+                      >
+                        ({isProfit ? "+" : ""}
+                        {h.pnl_percent.toFixed(2)}%)
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className="font-mono font-bold text-gray-900">
-                  {h.amount}枚
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

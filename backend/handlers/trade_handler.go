@@ -4,6 +4,7 @@ package handlers
 import (
 	"crypto-ai-app/database"
 	"crypto-ai-app/models"
+	"crypto-ai-app/services"
 	"net/http"
 	"time"
 
@@ -142,4 +143,62 @@ func GetTrades(c *gin.Context) {
 	var trades []models.Trade
 	database.DB.Order("created_at desc").Find(&trades)
 	c.JSON(http.StatusOK, trades)
+}
+
+// 損益一覧
+type HoldingPnL struct {
+	CoinID       string  `json:"coin_id"`
+	CoinName     string  `json:"coin_name"`
+	Amount       float64 `json:"amount"`
+	AvgPrice     float64 `json:"avg_price"`
+	CurrentPrice float64 `json:"current_price"`
+	Pnl          float64 `json:"pnl"`
+	PnlPercent   float64 `json:"pnl_percent"`
+}
+
+func GetHoldingsPnL(c *gin.Context) {
+	var holdings []models.Holding
+	if err := database.DB.Find(&holdings).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保有データの取得に失敗しました"})
+		return
+	}
+	if len(holdings) == 0 {
+		c.JSON(http.StatusOK, []HoldingPnL{})
+		return
+	}
+
+	// coin_id一覧を作成
+	coinIDs := make([]string, len(holdings))
+	for i, h := range holdings {
+		coinIDs[i] = h.CoinID
+	}
+
+	// CoinGeckoから現在価格を一括取得
+	prices, err := services.FetchCurrentPrices(coinIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "現在価格の取得に失敗しました"})
+		return
+	}
+
+	// 損益計算
+	result := make([]HoldingPnL, 0, len(holdings))
+	for _, h := range holdings {
+		currentPrice := prices[h.CoinID]
+		pnl := (currentPrice - h.AvgPrice) * h.Amount
+		pnlPercent := 0.0
+		if h.AvgPrice > 0 {
+			pnlPercent = (currentPrice - h.AvgPrice) / h.AvgPrice * 100
+		}
+		result = append(result, HoldingPnL{
+			CoinID:       h.CoinID,
+			CoinName:     h.CoinName,
+			Amount:       h.Amount,
+			AvgPrice:     h.AvgPrice,
+			CurrentPrice: currentPrice,
+			Pnl:          pnl,
+			PnlPercent:   pnlPercent,
+		})
+	}
+
+	c.JSON(http.StatusOK, result)
 }

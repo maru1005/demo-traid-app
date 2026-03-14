@@ -1,19 +1,9 @@
 // src/app/history/page.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { Trade } from "@/types";
 import { API_BASE_URL } from "@/lib/config";
-
-interface Trade {
-  id: number;
-  coin_id: string;
-  coin_name: string;
-  type: "buy" | "sell";
-  amount: number;
-  price: number;
-  total: number;
-  created_at: string;
-}
 
 export default function HistoryPage() {
   const [trades, setTrades] = useState<Trade[]>([]);

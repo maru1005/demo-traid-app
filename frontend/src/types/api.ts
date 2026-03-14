@@ -20,6 +20,22 @@ export const API_PATHS = {
   analyze: `${API_BASE_PATH}/analyze`,
   /** GET 価格履歴（クエリ: id） */
   history: `${API_BASE_PATH}/history`,
+  /** GET ユーザー情報 */
+  user: `${API_BASE_PATH}/user`,
+  /** POST ユーザー初期化 */
+  userInit: `${API_BASE_PATH}/user/init`,
+  /** POST 資金追加 */
+  userDeposit: `${API_BASE_PATH}/user/deposit`,
+  /** POST 購入 */
+  tradeBuy: `${API_BASE_PATH}/trade/buy`,
+  /** POST 売却 */
+  tradeSell: `${API_BASE_PATH}/trade/sell`,
+  /** GET 保有残高一覧 */
+  holdings: `${API_BASE_PATH}/holdings`,
+  /** GET 保有残高＋損益一覧 */
+  holdingsPnL: `${API_BASE_PATH}/holdings/pnl`,
+  /** GET 取引履歴 */
+  trades: `${API_BASE_PATH}/trades`,
 } as const;
 
 // =============================================================================
