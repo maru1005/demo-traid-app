@@ -28,8 +28,12 @@ func Connect() {
 		log.Fatal("❌ DB_HOST が設定されていません。.env ファイルを確認してください。")
 	}
 
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Tokyo",
-		host, user, os.Getenv("DB_PASSWORD"), dbname, port)
+	sslmode := os.Getenv("DB_SSLMODE")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Tokyo",
+		host, user, os.Getenv("DB_PASSWORD"), dbname, port, sslmode)
 
 	// GORMで接続
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})

@@ -3,6 +3,7 @@ package routes
 
 import (
 	"crypto-ai-app/handlers"
+	"crypto-ai-app/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,21 +11,26 @@ import (
 func SetupRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	{
-		// コイン
+		// 認証不要（価格情報は誰でも見れる）
 		api.GET("/coins", handlers.GetCoins)
 		api.GET("/analyze", handlers.AnalyzeCoin)
 		api.GET("/history", handlers.GetPriceHistory)
 
-		// ユーザー
-		api.GET("/user", handlers.GetUser)
-		api.POST("/user/init", handlers.InitUser)
-		api.POST("/user/deposit", handlers.Deposit)
+		// 認証必要
+		auth := api.Group("/")
+		auth.Use(middleware.AuthRequired())
+		{
+			// ユーザー
+			auth.GET("/user", handlers.GetUser)
+			auth.POST("/user/init", handlers.InitUser)
+			auth.POST("/user/deposit", handlers.Deposit)
 
-		// トレード
-		api.POST("/trade/buy", handlers.BuyCoin)
-		api.POST("/trade/sell", handlers.SellCoin)
-		api.GET("/holdings", handlers.GetHoldings)
-		api.GET("/holdings/pnl", handlers.GetHoldingsPnL)
-		api.GET("/trades", handlers.GetTrades)
+			// トレード
+			auth.POST("/trade/buy", handlers.BuyCoin)
+			auth.POST("/trade/sell", handlers.SellCoin)
+			auth.GET("/holdings", handlers.GetHoldings)
+			auth.GET("/holdings/pnl", handlers.GetHoldingsPnL)
+			auth.GET("/trades", handlers.GetTrades)
+		}
 	}
 }

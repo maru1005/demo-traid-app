@@ -1,17 +1,15 @@
-// src/app/history/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { Trade } from "@/types";
-import { API_BASE_URL } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 
 export default function HistoryPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
 
   useEffect(() => {
     const fetchTrades = async () => {
-      const res = await fetch(`${API_BASE_URL}/api/trades`);
-      const data = await res.json();
+      const data = await apiClient.getTrades();
       setTrades(data);
     };
     fetchTrades();

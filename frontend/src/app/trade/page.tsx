@@ -1,11 +1,10 @@
-// src/app/trade/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { AlertCircle } from "lucide-react";
 import Image from "next/image";
 import { Coin, User, HoldingPnL } from "@/types";
-import { API_BASE_URL } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 
 export default function TradePage() {
   const [coins, setCoins] = useState<Coin[]>([]);
@@ -26,9 +25,8 @@ export default function TradePage() {
   const [showInit, setShowInit] = useState(false);
 
   const fetchUser = useCallback(async () => {
-    const res = await fetch(`${API_BASE_URL}/api/user`);
-    if (res.ok) {
-      const data = await res.json();
+    const data = await apiClient.getUser();
+    if (data) {
       setUser(data);
       setShowInit(false);
     } else {
@@ -37,15 +35,13 @@ export default function TradePage() {
   }, []);
 
   const fetchCoins = useCallback(async () => {
-    const res = await fetch(`${API_BASE_URL}/api/coins`);
-    const data = await res.json();
+    const data = await apiClient.getCoins();
     setCoins(data);
     if (data.length > 0) setSelectedCoin(data[0]);
   }, []);
 
   const fetchHoldingsPnL = useCallback(async () => {
-    const res = await fetch(`${API_BASE_URL}/api/holdings/pnl`);
-    const data = await res.json();
+    const data = await apiClient.getHoldingsPnL();
     setHoldingsPnL(data);
   }, []);
 
@@ -57,27 +53,15 @@ export default function TradePage() {
 
   const handleDeposit = async () => {
     if (!depositAmount) return;
-    const res = await fetch(`${API_BASE_URL}/api/user/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: parseFloat(depositAmount) }),
-    });
-    if (res.ok) {
-      setDepositAmount("");
-      setShowDeposit(false);
-      fetchUser();
-    }
+    await apiClient.deposit({ amount: parseFloat(depositAmount) });
+    setDepositAmount("");
+    setShowDeposit(false);
+    fetchUser();
   };
 
   const handleInit = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/user/init`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ balance: parseFloat(initBalance) }),
-    });
-    if (res.ok) {
-      fetchUser();
-    }
+    await apiClient.initUser({ balance: parseFloat(initBalance) });
+    fetchUser();
   };
 
   const handleTrade = async (type: "buy" | "sell") => {
@@ -87,27 +71,19 @@ export default function TradePage() {
     setMessage("");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/trade/${type}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coin_id: selectedCoin.id,
-          coin_name: selectedCoin.name,
-          amount: parseFloat(amount),
-          price: selectedCoin.current_price,
-        }),
+      const fn = type === "buy" ? apiClient.buy : apiClient.sell;
+      const data = await fn({
+        coin_id: selectedCoin.id,
+        coin_name: selectedCoin.name,
+        amount: parseFloat(amount),
+        price: selectedCoin.current_price,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error);
-      } else {
-        setMessage(data.message);
-        setAmount("");
-        fetchUser();
-        fetchHoldingsPnL();
-      }
-    } catch {
-      setError("通信エラーが発生しました");
+      setMessage(data.message);
+      setAmount("");
+      fetchUser();
+      fetchHoldingsPnL();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "通信エラーが発生しました");
     } finally {
       setLoading(false);
     }
@@ -190,7 +166,6 @@ export default function TradePage() {
         {/* トレードフォーム */}
         {user && (
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-            {/* コイン選択 */}
             <div className="relative">
               <select
                 value={selectedCoin?.id || ""}
@@ -208,7 +183,6 @@ export default function TradePage() {
               </select>
             </div>
 
-            {/* 現在価格 */}
             {selectedCoin && (
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                 {selectedCoin.image && (
@@ -231,7 +205,6 @@ export default function TradePage() {
               </div>
             )}
 
-            {/* 数量入力 */}
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">数量</label>
               <input
@@ -252,7 +225,6 @@ export default function TradePage() {
               )}
             </div>
 
-            {/* エラー・メッセージ */}
             {error && (
               <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-center gap-2 text-rose-600">
                 <AlertCircle className="w-4 h-4" />
@@ -265,7 +237,6 @@ export default function TradePage() {
               </div>
             )}
 
-            {/* BUY / SELL ボタン */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleTrade("buy")}

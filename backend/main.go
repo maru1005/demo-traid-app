@@ -33,7 +33,7 @@ func main() {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"http://localhost:3000"},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders: []string{"Content-Type"},
+		AllowHeaders: []string{"Content-Type", "Authorization", "X-Requested-With"},
 	}))
 
 	// ルートハンドラーの登録

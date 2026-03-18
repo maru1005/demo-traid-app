@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/lib/config";
+import { supabase } from "@/lib/supabase";
 import {
   buildApiUrl,
   type ApiErrorResponse,
@@ -7,36 +8,59 @@ import {
   type GetCoinsResponse,
   type GetHistoryParams,
   type GetHistoryResponse,
-} from "@/types/api";
+  type GetHoldingsResponse,
+  type GetHoldingsPnLResponse,
+  type GetTradesResponse,
+  type TradeRequest,
+  type TradeResponse,
+  type InitUserRequest,
+  type DepositRequest,
+  type User,
+} from "@/types";
 
 // フロント側のAPIミドルウェア的な役割をするクライアント
 export const apiUrls = buildApiUrl(API_BASE_URL);
 
-function withDefaultHeaders(init?: RequestInit): RequestInit {
+// Supabaseのアクセストークンを取得
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  
+   const token = data.session?.access_token;
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function withDefaultHeaders(init?: RequestInit, auth = false): Promise<RequestInit> {
   const headers = new Headers(init?.headers);
   headers.set("X-Requested-With", "crypto-ai-frontend");
+  if (auth) {
+    const authHeaders = await getAuthHeader();
+    Object.entries(authHeaders).forEach(([k, v]) => headers.set(k, v));
+  }
   return { ...init, headers };
 }
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, withDefaultHeaders(init));
+async function fetchJson<T>(input: string, init?: RequestInit, auth = false): Promise<T> {
+  const res = await fetch(input, await withDefaultHeaders(init, auth));
   const text = await res.text();
 
   if (!res.ok) {
+    let message = `API error ${res.status}`;
     try {
       const data = JSON.parse(text) as ApiErrorResponse;
-      throw new Error(data.error || `API error ${res.status}`);
+      if (data.error) message = data.error;
     } catch {
-      throw new Error(`API error ${res.status}`);
+      // JSONパース失敗は無視
     }
+    throw new Error(message);
   }
 
-  // レスポンスボディが空のケースはほぼないが、安全のため。
   if (!text) return {} as T;
   return JSON.parse(text) as T;
 }
 
 export const apiClient = {
+  // 認証不要
   getCoins(): Promise<GetCoinsResponse> {
     return fetchJson<GetCoinsResponse>(apiUrls.coins());
   },
@@ -46,5 +70,54 @@ export const apiClient = {
   analyze(params: GetAnalyzeParams): Promise<GetAnalyzeResponse> {
     return fetchJson<GetAnalyzeResponse>(apiUrls.analyze(params));
   },
-};
 
+  // 認証必要
+  async getUser(): Promise<User | null> {
+    try {
+      return await fetchJson<User>(`${API_BASE_URL}/api/user`, {}, true);
+    } catch {
+      return null;
+    }
+  },
+  initUser(req: InitUserRequest): Promise<User> {
+    return fetchJson<User>(`${API_BASE_URL}/api/user/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
+  deposit(req: DepositRequest): Promise<User> {
+    return fetchJson<User>(`${API_BASE_URL}/api/user/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
+  buy(req: TradeRequest): Promise<TradeResponse> {
+    return fetchJson<TradeResponse>(`${API_BASE_URL}/api/trade/buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
+  sell(req: TradeRequest): Promise<TradeResponse> {
+    return fetchJson<TradeResponse>(`${API_BASE_URL}/api/trade/sell`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
+  getHoldings(): Promise<GetHoldingsResponse> {
+    return fetchJson<GetHoldingsResponse>(`${API_BASE_URL}/api/holdings`, {}, true);
+  },
+  async getHoldingsPnL(): Promise<GetHoldingsPnLResponse> {
+    try {
+      return await fetchJson<GetHoldingsPnLResponse>(`${API_BASE_URL}/api/holdings/pnl`, {}, true);
+    } catch {
+      return [];
+    }
+  },
+  getTrades(): Promise<GetTradesResponse> {
+    return fetchJson<GetTradesResponse>(`${API_BASE_URL}/api/trades`, {}, true);
+  },
+};
