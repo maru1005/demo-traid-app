@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // auth_idからユーザーを取得するヘルパー
@@ -58,46 +59,85 @@ func BuyCoin(c *gin.Context) {
 
 	total := req.Amount * req.Price
 
-	if user.Balance < total {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "残高が不足しています"})
+	// transactioin
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// ユーザーの残高を確認
+		var currentUser models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", user.ID).First(&currentUser).Error; err != nil {
+			return err
+		}
+
+		if currentUser.Balance < total {
+			return errors.New("残高が不足しています")
+		}
+
+		if err := tx.Model(&currentUser).Update("balance", currentUser.Balance-total).Error; err != nil {
+			return err
+		}
+
+		// ユーザー保有額
+		var holding models.Holding
+		result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND coin_id = ?", currentUser.ID, req.CoinID).First(&holding)
+		if result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				holding = models.Holding{
+					UserID:   currentUser.ID,
+					CoinID:   req.CoinID,
+					CoinName: req.CoinName,
+					Amount:   req.Amount,
+					AvgPrice: req.Price,
+				}
+				if err := tx.Create(&holding).Error; err != nil {
+					return err
+				}
+			} else {
+				return result.Error
+			}
+		} else {
+			totalAmount := holding.Amount + req.Amount
+			avgPrice := (holding.Amount*holding.AvgPrice + req.Amount*req.Price) / totalAmount
+
+			if err := tx.Model(&holding).Updates(map[string]interface{}{
+				"amount":    totalAmount,
+				"avg_price": avgPrice,
+			}).Error; err != nil {
+				return err
+			}
+		}
+
+		trade := models.Trade{
+			UserID:    currentUser.ID,
+			CoinID:    req.CoinID,
+			CoinName:  req.CoinName,
+			Type:      "buy",
+			Amount:    req.Amount,
+			Price:     req.Price,
+			Total:     total,
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(&trade).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		// エラーハンドリング
+		if req.CoinID == "" || req.Amount <= 0 || req.Price <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "リクエストが不正です"})
+			return
+		}
+
+		if err.Error() == "残高が不足しています" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "取引に失敗しました"})
 		return
 	}
 
-	database.DB.Model(user).Update("balance", user.Balance-total)
-
-	var holding models.Holding
-	result := database.DB.Where("user_id = ? AND coin_id = ?", user.ID, req.CoinID).First(&holding)
-	if result.Error != nil {
-		holding = models.Holding{
-			UserID:   user.ID,
-			CoinID:   req.CoinID,
-			CoinName: req.CoinName,
-			Amount:   req.Amount,
-			AvgPrice: req.Price,
-		}
-		database.DB.Create(&holding)
-	} else {
-		totalAmount := holding.Amount + req.Amount
-		avgPrice := (holding.Amount*holding.AvgPrice + req.Amount*req.Price) / totalAmount
-		database.DB.Model(&holding).Updates(map[string]interface{}{
-			"amount":    totalAmount,
-			"avg_price": avgPrice,
-		})
-	}
-
-	trade := models.Trade{
-		UserID:    user.ID,
-		CoinID:    req.CoinID,
-		CoinName:  req.CoinName,
-		Type:      "buy",
-		Amount:    req.Amount,
-		Price:     req.Price,
-		Total:     total,
-		CreatedAt: time.Now(),
-	}
-	database.DB.Create(&trade)
-
-	c.JSON(http.StatusOK, gin.H{"message": "購入しました", "balance": user.Balance - total})
+	c.JSON(http.StatusOK, gin.H{"message": "購入しました"})
 }
 
 // 売る
@@ -122,40 +162,66 @@ func SellCoin(c *gin.Context) {
 		return
 	}
 
-	var holding models.Holding
-	if database.DB.Where("user_id = ? AND coin_id = ?", user.ID, req.CoinID).First(&holding).Error != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "保有していません"})
-		return
-	}
-	if holding.Amount < req.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "保有数量が不足しています"})
-		return
-	}
-
 	total := req.Amount * req.Price
 
-	database.DB.Model(user).Update("balance", user.Balance+total)
+	// transaction
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// 保有量を確認
+		var holding models.Holding
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND coin_id = ?", user.ID, req.CoinID).First(&holding).Error; err != nil {
+			return errors.New("保有コインが見つかりません")
+		}
+		if holding.Amount < req.Amount {
+			return errors.New("保有数量が不足しています")
+		}
 
-	newAmount := holding.Amount - req.Amount
-	if newAmount == 0 {
-		database.DB.Delete(&holding)
-	} else {
-		database.DB.Model(&holding).Update("amount", newAmount)
+		// ユーザー残高更新
+		var currentUser models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", user.ID).First(&currentUser).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&currentUser).Update("balance", currentUser.Balance+total).Error; err != nil {
+			return err
+		}
+
+		newAmount := holding.Amount - req.Amount
+		if newAmount <= 0 {
+			if err := tx.Delete(&holding).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Model(&holding).Update("amount", newAmount).Error; err != nil {
+				return err
+			}
+		}
+
+		trade := models.Trade{
+			UserID:    currentUser.ID,
+			CoinID:    req.CoinID,
+			CoinName:  req.CoinName,
+			Type:      "sell",
+			Amount:    req.Amount,
+			Price:     req.Price,
+			Total:     total,
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(&trade).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if err.Error() == "保有コインが見つかりません" || err.Error() == "保有数量が不足しています" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "取引に失敗しました"})
+		return
 	}
 
-	trade := models.Trade{
-		UserID:    user.ID,
-		CoinID:    req.CoinID,
-		CoinName:  req.CoinName,
-		Type:      "sell",
-		Amount:    req.Amount,
-		Price:     req.Price,
-		Total:     total,
-		CreatedAt: time.Now(),
-	}
-	database.DB.Create(&trade)
-
-	c.JSON(http.StatusOK, gin.H{"message": "売却しました", "balance": user.Balance + total})
+	c.JSON(http.StatusOK, gin.H{"message": "売却しました"})
 }
 
 // 保有残高一覧
