@@ -11,6 +11,8 @@ import {
   type GetHoldingsResponse,
   type GetHoldingsPnLResponse,
   type GetTradesResponse,
+  type PostTargetPnLRequest,
+  type PostTargetPnLResponse,
   type TradeRequest,
   type TradeResponse,
   type InitUserRequest,
@@ -119,5 +121,12 @@ export const apiClient = {
   },
   getTrades(): Promise<GetTradesResponse> {
     return fetchJson<GetTradesResponse>(`${API_BASE_URL}/api/trades`, {}, true);
+  },
+  postTargetPnL(req: PostTargetPnLRequest): Promise<PostTargetPnLResponse> {
+    return fetchJson<PostTargetPnLResponse>(`${API_BASE_URL}/api/trade/target-pnl`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
   },
 };

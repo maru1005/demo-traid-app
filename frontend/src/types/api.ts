@@ -4,6 +4,7 @@
  */
 
 import type { Coin, PriceHistoryPoint } from "./coin";
+import type { HoldingPnL, TargetPnLRequest } from "./trade";
 
 // =============================================================================
 // エンドポイントパス
@@ -36,6 +37,8 @@ export const API_PATHS = {
   holdingsPnL: `${API_BASE_PATH}/holdings/pnl`,
   /** GET 取引履歴 */
   trades: `${API_BASE_PATH}/trades`,
+  /** POST 損益シミュレーション */
+  tradeTargetPnL: `${API_BASE_PATH}/trade/target-pnl`,
 } as const;
 
 // =============================================================================
@@ -76,6 +79,12 @@ export interface GetAnalyzeResponse {
 
 /** GET /api/history のレスポンス */
 export type GetHistoryResponse = PriceHistoryPoint[];
+
+/** POST /api/trade/target-pnl のリクエスト */
+export type PostTargetPnLRequest = TargetPnLRequest;
+
+/** POST /api/trade/target-pnl のレスポンス */
+export type PostTargetPnLResponse = HoldingPnL[];
 
 /** エラーレスポンス（各エンドポイント共通） */
 export interface ApiErrorResponse {

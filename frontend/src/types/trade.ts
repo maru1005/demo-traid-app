@@ -60,6 +60,10 @@ export interface User {
     amount: number;
   }
   
+  export interface TargetPnLRequest {
+    prices: Record<string, number>;
+  }
+  
   // =============================================================================
   // レスポンス型
   // =============================================================================

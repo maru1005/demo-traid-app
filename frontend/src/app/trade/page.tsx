@@ -1,37 +1,32 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { AlertCircle } from "lucide-react";
-import Image from "next/image";
-import { Coin, User, HoldingPnL } from "@/types";
+import { Coin, User, HoldingPnL, Trade } from "@/types";
 import { apiClient } from "@/lib/apiClient";
+import { TradeSimulator } from "@/components/TradeSimulator";
+import { TargetPnLCard } from "@/components/TargetPnLCard";
+import { CoinSelector } from "@/components/CoinSelector";
 
 export default function TradePage() {
   const [coins, setCoins] = useState<Coin[]>([]);
   const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
   const [holdingsPnL, setHoldingsPnL] = useState<HoldingPnL[]>([]);
+  const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // 資金追加用
   const [depositAmount, setDepositAmount] = useState("");
   const [showDeposit, setShowDeposit] = useState(false);
 
-  // 初期残高設定用
-  const [initBalance, setInitBalance] = useState("");
-  const [showInit, setShowInit] = useState(false);
+  const [targetPnL, setTargetPnL] = useState(100000);
 
   const fetchUser = useCallback(async () => {
     const data = await apiClient.getUser();
-    if (data) {
-      setUser(data);
-      setShowInit(false);
-    } else {
-      setShowInit(true);
-    }
+    setUser(data);
   }, []);
 
   const fetchCoins = useCallback(async () => {
@@ -45,22 +40,38 @@ export default function TradePage() {
     setHoldingsPnL(data);
   }, []);
 
+  const fetchRecentTrades = useCallback(async () => {
+    const data = await apiClient.getTrades();
+    setRecentTrades(data.slice(0, 5));
+  }, []);
+
   useEffect(() => {
     fetchUser();
     fetchCoins();
     fetchHoldingsPnL();
-  }, [fetchUser, fetchCoins, fetchHoldingsPnL]);
+    fetchRecentTrades();
+  }, [fetchUser, fetchCoins, fetchHoldingsPnL, fetchRecentTrades]);
+
+  // 総資産 = 残高 + 保有コイン時価
+  const totalAssets = useMemo(() => {
+    const holdingsValue = holdingsPnL.reduce(
+      (sum, h) => sum + h.current_price * h.amount,
+      0,
+    );
+    return (user?.balance ?? 0) + holdingsValue;
+  }, [user, holdingsPnL]);
+
+  // 現在の実損益（総資産ベース）- TargetPnLCardに渡す
+  // 初期残高が取れないため、holdingsPnLの合計損益で代用（セッション設計後に改善）
+  const currentPnL = useMemo(() => {
+    return holdingsPnL.reduce((sum, h) => sum + h.pnl, 0);
+  }, [holdingsPnL]);
 
   const handleDeposit = async () => {
     if (!depositAmount) return;
     await apiClient.deposit({ amount: parseFloat(depositAmount) });
     setDepositAmount("");
     setShowDeposit(false);
-    fetchUser();
-  };
-
-  const handleInit = async () => {
-    await apiClient.initUser({ balance: parseFloat(initBalance) });
     fetchUser();
   };
 
@@ -82,6 +93,7 @@ export default function TradePage() {
       setAmount("");
       fetchUser();
       fetchHoldingsPnL();
+      fetchRecentTrades();
     } catch (e) {
       setError(e instanceof Error ? e.message : "通信エラーが発生しました");
     } finally {
@@ -89,7 +101,7 @@ export default function TradePage() {
     }
   };
 
-  const total =
+  const estimatedTradeTotal =
     selectedCoin && amount
       ? parseFloat(amount) * selectedCoin.current_price
       : 0;
@@ -97,113 +109,75 @@ export default function TradePage() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <header className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-4 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl font-black tracking-tight text-gray-900">
             トレード
           </h1>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        {/* 初期残高設定 */}
-        {showInit && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-            <h2 className="font-bold text-gray-900">初期残高を設定</h2>
-            <input
-              type="number"
-              value={initBalance}
-              onChange={(e) => setInitBalance(e.target.value)}
-              placeholder="例: 1000000"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              onClick={handleInit}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
-            >
-              設定する
-            </button>
-          </div>
-        )}
-
-        {/* 残高表示 */}
-        {user && (
-          <>
-            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
-              <p className="text-indigo-100 text-sm font-bold">利用可能残高</p>
-              <p className="text-4xl font-black mt-1">
-                ¥{user.balance.toLocaleString()}
+      <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+        {/* 上段：総資産 + 目標損益 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* 総資産カード */}
+          <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
+            <p className="text-indigo-100 text-sm font-bold">総資産</p>
+            <p className="text-4xl font-black mt-1">
+              ¥{totalAssets.toLocaleString()}
+            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-indigo-200 text-xs">
+                利用可能残高: ¥{(user?.balance ?? 0).toLocaleString()}
               </p>
               <button
                 onClick={() => setShowDeposit((v) => !v)}
-                className="mt-4 text-xs font-bold text-indigo-200 hover:text-white transition-colors"
+                className="text-xs font-bold text-indigo-200 hover:text-white transition-colors"
               >
-                {showDeposit ? "▲ 閉じる" : "＋ 資金を追加する"}
+                {showDeposit ? "▲ 閉じる" : "＋ 入金"}
               </button>
             </div>
 
-            {/* 資金追加フォーム */}
             {showDeposit && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-                <h2 className="font-bold text-gray-900">資金を追加</h2>
+              <div className="mt-4 space-y-2">
                 <input
                   type="number"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="例: 100000"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full bg-white/20 text-white placeholder-indigo-300 border border-white/30 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/50"
                 />
                 <button
                   onClick={handleDeposit}
-                  className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                  className="w-full bg-white text-indigo-600 py-2 rounded-xl font-bold hover:bg-indigo-50 transition-colors"
                 >
-                  追加する
+                  入金する
                 </button>
               </div>
             )}
-          </>
-        )}
+          </div>
 
-        {/* トレードフォーム */}
-        {user && (
+          {/* 目標損益カード */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h2 className="font-bold text-gray-900 mb-4">目標損益</h2>
+            <TargetPnLCard
+              targetPnL={targetPnL}
+              currentPnL={currentPnL}
+              onChange={setTargetPnL}
+            />
+          </div>
+        </div>
+
+        {/* 中段：トレード + シミュレーター */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* 左：トレードフォーム */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-            <div className="relative">
-              <select
-                value={selectedCoin?.id || ""}
-                onChange={(e) => {
-                  const coin = coins.find((c) => c.id === e.target.value);
-                  if (coin) setSelectedCoin(coin);
-                }}
-                className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-gray-700"
-              >
-                {coins.map((coin) => (
-                  <option key={coin.id} value={coin.id}>
-                    {coin.name} (¥{coin.current_price.toLocaleString()})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <h2 className="font-bold text-gray-900">トレード</h2>
 
-            {selectedCoin && (
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                {selectedCoin.image && (
-                  <div className="relative w-8 h-8">
-                    <Image
-                      src={selectedCoin.image}
-                      alt={selectedCoin.name}
-                      fill
-                      sizes="32px"
-                      className="object-contain"
-                    />
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs text-gray-500">現在価格</p>
-                  <p className="font-bold text-gray-900">
-                    ¥{selectedCoin.current_price.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            )}
+            <CoinSelector
+              coins={coins}
+              selectedCoin={selectedCoin}
+              onChange={setSelectedCoin}
+            />
 
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">数量</label>
@@ -215,11 +189,11 @@ export default function TradePage() {
                 step="0.0001"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              {total > 0 && (
+              {estimatedTradeTotal > 0 && (
                 <p className="text-sm text-gray-500">
                   合計:{" "}
                   <span className="font-bold text-gray-900">
-                    ¥{total.toLocaleString()}
+                    ¥{estimatedTradeTotal.toLocaleString()}
                   </span>
                 </p>
               )}
@@ -254,55 +228,60 @@ export default function TradePage() {
               </button>
             </div>
           </div>
-        )}
 
-        {/* 保有残高・損益 */}
-        {holdingsPnL.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-3">
-            <h2 className="font-bold text-gray-900">保有残高・損益</h2>
-            {holdingsPnL.map((h) => {
-              const isProfit = h.pnl >= 0;
-              return (
-                <div
-                  key={h.coin_id}
-                  className="p-4 bg-gray-50 rounded-xl space-y-2"
-                >
-                  <div className="flex justify-between items-center">
-                    <p className="font-bold text-gray-900">{h.coin_name}</p>
-                    <p className="font-mono font-bold text-gray-900">
-                      {h.amount}枚
-                    </p>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>取得単価 ¥{h.avg_price.toLocaleString()}</span>
-                    <span>現在 ¥{h.current_price.toLocaleString()}</span>
-                  </div>
+          {/* 右：シミュレーター */}
+          <div className="lg:sticky lg:top-24">
+            <TradeSimulator holdings={holdingsPnL} coins={coins} />
+          </div>
+        </div>
+
+        {/* 下段：直近5件の売買履歴 */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          <h2 className="font-bold text-gray-900 mb-4">直近の取引</h2>
+          {recentTrades.length === 0 ? (
+            <p className="text-sm text-gray-400">取引履歴がありません</p>
+          ) : (
+            <div className="space-y-2">
+              {recentTrades.map((trade) => {
+                const isBuy = trade.type === "buy";
+                return (
                   <div
-                    className={`flex justify-between items-center pt-1 border-t ${isProfit ? "border-emerald-100" : "border-rose-100"}`}
+                    key={trade.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
                   >
-                    <span className="text-xs font-bold text-gray-500">
-                      損益
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-xs font-black px-2 py-1 rounded-md ${
+                          isBuy
+                            ? "bg-emerald-100 text-emerald-600"
+                            : "bg-rose-100 text-rose-500"
+                        }`}
+                      >
+                        {isBuy ? "BUY" : "SELL"}
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">
+                          {trade.coin_name}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(trade.created_at).toLocaleString("ja-JP")}
+                        </p>
+                      </div>
+                    </div>
                     <div className="text-right">
-                      <p
-                        className={`font-black text-sm ${isProfit ? "text-emerald-600" : "text-rose-500"}`}
-                      >
-                        {isProfit ? "+" : ""}¥
-                        {Math.round(h.pnl).toLocaleString()}
+                      <p className="text-sm font-bold text-gray-900">
+                        ¥{trade.total.toLocaleString()}
                       </p>
-                      <p
-                        className={`text-xs font-bold ${isProfit ? "text-emerald-500" : "text-rose-400"}`}
-                      >
-                        ({isProfit ? "+" : ""}
-                        {h.pnl_percent.toFixed(2)}%)
+                      <p className="text-xs text-gray-400">
+                        {trade.amount} 枚 @ ¥{trade.price.toLocaleString()}
                       </p>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

@@ -2,22 +2,12 @@
 package handlers
 
 import (
-	"crypto-ai-app/database"
-	"crypto-ai-app/models"
+	"crypto-ai-app/services"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
-
-// auth_idをcontextから取得するヘルパー
-func getAuthID(c *gin.Context) (string, bool) {
-	authID, exists := c.Get("auth_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "認証情報が見つかりません"})
-		return "", false
-	}
-	return authID.(string), true
-}
 
 // 残高取得
 func GetUser(c *gin.Context) {
@@ -26,11 +16,13 @@ func GetUser(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if database.DB.Where("auth_id = ?", authID).First(&user).Error != nil {
-		// 未登録の場合は空を返す（404じゃなく200）
-		c.JSON(http.StatusOK, nil)
-		return
+	user, err := services.GetUserByAuthID(authID)
+	if err != nil {
+		if errors.Is(err, services.ErrUserNotFound) {
+			c.JSON(http.StatusOK, nil) // Not found is not an error for this endpoint
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー取得に失敗しました"})
 	}
 	c.JSON(http.StatusOK, user)
 }
@@ -51,14 +43,15 @@ func InitUser(c *gin.Context) {
 	}
 
 	// すでに存在する場合は作成しない
-	var existing models.User
-	if database.DB.Where("auth_id = ?", authID).First(&existing).Error == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "すでに初期化済みです"})
-		return
+	user, err := services.InitUser(authID, req.Balance)
+	if err != nil {
+		if errors.Is(err, services.ErrUserAlreadyExists) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー作成に失敗しました"})
 	}
 
-	user := models.User{AuthID: authID, Balance: req.Balance}
-	database.DB.Create(&user)
 	c.JSON(http.StatusOK, user)
 }
 
@@ -77,12 +70,14 @@ func Deposit(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if database.DB.Where("auth_id = ?", authID).First(&user).Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ユーザーが見つかりません"})
-		return
+	user, err := services.Deposit(authID, req.Amount)
+	if err != nil {
+		if errors.Is(err, services.ErrUserNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "資金追加に失敗しました"})
 	}
 
-	database.DB.Model(&user).Update("balance", user.Balance+req.Amount)
 	c.JSON(http.StatusOK, user)
 }

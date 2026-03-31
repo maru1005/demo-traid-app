@@ -29,7 +29,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* ボトムナビの高さ分だけ下にパディング */}
-        <div className="pb-16">{children}</div>
+        <div className="lg:pb-0 pb-16">{children}</div>
         <BottomNav />
       </body>
     </html>
