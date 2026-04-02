@@ -8,7 +8,10 @@ type Props = {
 
 export const TargetPnLCard = ({ targetPnL, currentPnL, onChange }: Props) => {
   const progress =
-    targetPnL > 0 ? Math.min((currentPnL / targetPnL) * 100, 100) : 0;
+    // マイナス進捗を防ぐため下限を0にする
+    targetPnL > 0
+      ? Math.max(0, Math.min((currentPnL / targetPnL) * 100, 100))
+      : 0;
 
   const remaining = targetPnL - currentPnL;
 

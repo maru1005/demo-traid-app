@@ -129,4 +129,25 @@ export const apiClient = {
       body: JSON.stringify(req),
     }, true);
   },
+  startSession(req: { initial_balance: number; target_pnl: number }): Promise<{ message: string }> {
+    return fetchJson<{ message: string }>(`${API_BASE_URL}/api/session/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
+  resetSession(req: { initial_balance: number; target_pnl: number }): Promise<{ message: string }> {
+    return fetchJson<{ message: string }>(`${API_BASE_URL}/api/session/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
+  updateTarget(req: { target_pnl: number }): Promise<{ message: string }> {
+    return fetchJson<{ message: string }>(`${API_BASE_URL}/api/session/target`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }, true);
+  },
 };

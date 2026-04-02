@@ -8,9 +8,12 @@
 // =============================================================================
 
 export interface User {
-    id: number;
-    balance: number;
-  }
+  id: number;
+  balance: number;
+  initial_balance: number;
+  target_pnl: number;
+  session_id: number;
+}
   
   export interface Holding {
     id: number;
@@ -34,7 +37,7 @@ export interface User {
     id: number;
     coin_id: string;
     coin_name: string;
-    type: "buy" | "sell";
+    type: "buy" | "sell" | "deposit" ;
     amount: number;
     price: number;
     total: number;

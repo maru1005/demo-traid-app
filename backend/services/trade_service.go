@@ -30,6 +30,103 @@ type HoldingPnL struct {
 	PnlPercent   float64 `json:"pnl_percent"`
 }
 
+// StartSession は初回・リセット後のセッション開始処理
+// 初期残高・目標損益を設定し、depositレコードを履歴に残す
+func StartSession(userID uint, initialBalance, targetPnL float64) error {
+	if initialBalance <= 0 || targetPnL <= 0 {
+		return ErrInvalidInput
+	}
+
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		var user models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
+			return err
+		}
+
+		// セッションIDをインクリメント
+		newSessionID := user.SessionID + 1
+
+		// ユーザー情報を更新
+		if err := tx.Model(&user).Updates(map[string]interface{}{
+			"balance":         initialBalance,
+			"initial_balance": initialBalance,
+			"target_pnl":      targetPnL,
+			"session_id":      newSessionID,
+		}).Error; err != nil {
+			return err
+		}
+
+		// 入金レコードを履歴に追加
+		deposit := models.Trade{
+			UserID:    userID,
+			SessionID: newSessionID,
+			CoinID:    "deposit",
+			CoinName:  "入金",
+			Type:      "deposit",
+			Amount:    1,
+			Price:     initialBalance,
+			Total:     initialBalance,
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(&deposit).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// ResetSession は既存セッションをリセットして新セッションを開始する
+// 保有コインをすべて清算し、初期残高・目標損益を再設定する
+func ResetSession(userID uint, initialBalance, targetPnL float64) error {
+	if initialBalance <= 0 || targetPnL <= 0 {
+		return ErrInvalidInput
+	}
+
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		var user models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
+			return err
+		}
+
+		// 保有コインを全削除
+		if err := tx.Where("user_id = ?", userID).Delete(&models.Holding{}).Error; err != nil {
+			return err
+		}
+
+		// 新セッションID
+		newSessionID := user.SessionID + 1
+
+		// ユーザー情報を更新
+		if err := tx.Model(&user).Updates(map[string]interface{}{
+			"balance":         initialBalance,
+			"initial_balance": initialBalance,
+			"target_pnl":      targetPnL,
+			"session_id":      newSessionID,
+		}).Error; err != nil {
+			return err
+		}
+
+		// 新セッションの入金レコード
+		deposit := models.Trade{
+			UserID:    userID,
+			SessionID: newSessionID,
+			CoinID:    "deposit",
+			CoinName:  "入金",
+			Type:      "deposit",
+			Amount:    1,
+			Price:     initialBalance,
+			Total:     initialBalance,
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(&deposit).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 // BuyCoin コインの購入処理
 func BuyCoin(userID uint, coinID, coinName string, amount, price float64) error {
 	if coinID == "" || amount <= 0 || price <= 0 {
@@ -39,7 +136,6 @@ func BuyCoin(userID uint, coinID, coinName string, amount, price float64) error 
 	total := amount * price
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// ユーザーの残高を確認
 		var currentUser models.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&currentUser).Error; err != nil {
 			return err
@@ -53,7 +149,6 @@ func BuyCoin(userID uint, coinID, coinName string, amount, price float64) error 
 			return err
 		}
 
-		// ユーザー保有額
 		var holding models.Holding
 		result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND coin_id = ?", currentUser.ID, coinID).First(&holding)
 		if result.Error != nil {
@@ -85,6 +180,7 @@ func BuyCoin(userID uint, coinID, coinName string, amount, price float64) error 
 
 		trade := models.Trade{
 			UserID:    currentUser.ID,
+			SessionID: currentUser.SessionID,
 			CoinID:    coinID,
 			CoinName:  coinName,
 			Type:      "buy",
@@ -101,7 +197,7 @@ func BuyCoin(userID uint, coinID, coinName string, amount, price float64) error 
 	})
 }
 
-// SellCoin はコインの売却処理を行います
+// SellCoin コインの売却処理
 func SellCoin(userID uint, coinID, coinName string, amount, price float64) error {
 	if coinID == "" || amount <= 0 || price <= 0 {
 		return ErrInvalidInput
@@ -110,19 +206,17 @@ func SellCoin(userID uint, coinID, coinName string, amount, price float64) error
 	total := amount * price
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// 保有コインを確認
 		var holding models.Holding
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND coin_id = ?", userID, coinID).First(&holding).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrHoldingNotFound
 			}
-			return err // DBエラーなどをそのまま返す
+			return err
 		}
 		if holding.Amount < amount {
 			return ErrInsufficientHolding
 		}
 
-		// ユーザー残高更新
 		var currentUser models.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&currentUser).Error; err != nil {
 			return err
@@ -144,6 +238,7 @@ func SellCoin(userID uint, coinID, coinName string, amount, price float64) error
 
 		trade := models.Trade{
 			UserID:    currentUser.ID,
+			SessionID: currentUser.SessionID,
 			CoinID:    coinID,
 			CoinName:  coinName,
 			Type:      "sell",
@@ -202,7 +297,7 @@ func CalculateHoldingsPnL(userID uint) ([]HoldingPnL, error) {
 	return result, nil
 }
 
-// CalculateCustomPnL は外部（フロントエンド等）から与えられた価格を基に損益計算を行います
+// CalculateCustomPnL は外部から与えられた価格を基に損益計算を行います
 func CalculateCustomPnL(userID uint, prices map[string]float64) ([]HoldingPnL, error) {
 	var holdings []models.Holding
 	if err := database.DB.Where("user_id = ?", userID).Find(&holdings).Error; err != nil {
@@ -216,7 +311,6 @@ func CalculateCustomPnL(userID uint, prices map[string]float64) ([]HoldingPnL, e
 	for _, h := range holdings {
 		currentPrice, ok := prices[h.CoinID]
 		if !ok {
-			// 価格が渡されていないコインは計算から除外
 			continue
 		}
 		pnl := (currentPrice - h.AvgPrice) * h.Amount
@@ -254,4 +348,27 @@ func GetTrades(userID uint) ([]models.Trade, error) {
 		return nil, err
 	}
 	return trades, nil
+}
+
+// UpdateTarget は目標損益のみ更新します（保有コイン・残高はそのまま）
+func UpdateTarget(userID uint, targetPnL float64) error {
+	if targetPnL <= 0 {
+		return ErrInvalidInput
+	}
+
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		var user models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&user).Updates(map[string]interface{}{
+			"target_pnl": targetPnL,
+			"session_id": user.SessionID + 1,
+		}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
