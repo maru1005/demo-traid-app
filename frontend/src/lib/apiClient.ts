@@ -11,6 +11,8 @@ import {
   type GetHoldingsResponse,
   type GetHoldingsPnLResponse,
   type GetTradesResponse,
+  type GetSessionsResponse,
+  type GetSessionTradesResponse,
   type PostTargetPnLRequest,
   type PostTargetPnLResponse,
   type TradeRequest,
@@ -148,6 +150,17 @@ export const apiClient = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
+    }, true);
+  },
+  getSessions(): Promise<GetSessionsResponse> {
+    return fetchJson<GetSessionsResponse>(`${API_BASE_URL}/api/sessions`, {}, true);
+  },
+  getSessionTrades(sessionId: number): Promise<GetSessionTradesResponse> {
+    return fetchJson<GetSessionTradesResponse>(`${API_BASE_URL}/api/sessions/${sessionId}/trades`, {}, true);
+  },
+  deleteSession(sessionId: number): Promise<{ message: string }> {
+    return fetchJson<{ message: string }>(`${API_BASE_URL}/api/sessions/${sessionId}`, {
+      method: "DELETE",
     }, true);
   },
 };

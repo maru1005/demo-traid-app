@@ -16,14 +16,30 @@ func StartSession(c *gin.Context) {
 	if !ok {
 		return
 	}
+
+	// ユーザーが存在しない場合は新規作成
 	user, err := services.GetUserByAuthID(authID)
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "ユーザーが登録されていません"})
+			// 初回ログイン：usersテーブルにレコードを作成
+			newUser, createErr := services.InitUser(authID, 0)
+			if createErr != nil && !errors.Is(createErr, services.ErrUserAlreadyExists) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー作成に失敗しました"})
+				return
+			}
+			if newUser != nil {
+				user = newUser
+			} else {
+				user, err = services.GetUserByAuthID(authID)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー情報の取得に失敗しました"})
+					return
+				}
+			}
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー情報の取得に失敗しました"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー情報の取得に失敗しました"})
-		return
 	}
 
 	var req struct {
@@ -278,7 +294,7 @@ func GetTargetPnL(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// UpdateTarget は目標損益のみ更新
+// UpdateTarget は目標損益のみ更新するハンドラー
 func UpdateTarget(c *gin.Context) {
 	authID, ok := getAuthID(c)
 	if !ok {

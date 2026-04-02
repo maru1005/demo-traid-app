@@ -1,3 +1,4 @@
+// src/app/trade/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
@@ -42,7 +43,7 @@ export default function TradePage() {
     const data = await apiClient.getUser();
     setUser(data);
     // セッション未開始（initial_balanceが0）ならオンボーディング
-    if (!data || data.initial_balance === 0) {
+    if (!data || data.initial_balance === 0 || data.session_id === 0) {
       setPageState("onboarding");
     } else {
       setPageState("trading");
@@ -89,7 +90,7 @@ export default function TradePage() {
   // 目標達成判定: 総資産 >= 初期残高 + 目標損益
   useEffect(() => {
     if (pageState !== "trading" || !user || user.initial_balance === 0) return;
-    const isAchieved = totalAssets >= user.initial_balance + user.target_pnl;
+    const isAchieved = totalAssets >= user.total_deposited + user.target_pnl;
     if (isAchieved) setPageState("achieved");
   }, [totalAssets, user, pageState]);
 

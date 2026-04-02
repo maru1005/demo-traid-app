@@ -1,3 +1,4 @@
+// src/components/TargetPnLCard.tsx
 "use client";
 
 type Props = {

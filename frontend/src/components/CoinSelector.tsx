@@ -1,3 +1,4 @@
+// src/components/CoinSelector.tsx
 "use client";
 
 import Image from "next/image";

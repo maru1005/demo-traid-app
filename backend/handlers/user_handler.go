@@ -9,25 +9,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 残高取得
+// GetUser はユーザー情報と累計入金額を返す
 func GetUser(c *gin.Context) {
 	authID, ok := getAuthID(c)
 	if !ok {
 		return
 	}
 
-	user, err := services.GetUserByAuthID(authID)
+	stats, err := services.GetUserWithStats(authID)
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusOK, nil) // Not found is not an error for this endpoint
+			c.JSON(http.StatusOK, nil)
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー取得に失敗しました"})
+		return
 	}
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, stats)
 }
 
-// 初期残高設定
+// InitUser は初回ユーザー作成
 func InitUser(c *gin.Context) {
 	authID, ok := getAuthID(c)
 	if !ok {
@@ -42,7 +43,6 @@ func InitUser(c *gin.Context) {
 		return
 	}
 
-	// すでに存在する場合は作成しない
 	user, err := services.InitUser(authID, req.Balance)
 	if err != nil {
 		if errors.Is(err, services.ErrUserAlreadyExists) {
@@ -50,12 +50,13 @@ func InitUser(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ユーザー作成に失敗しました"})
+		return
 	}
 
 	c.JSON(http.StatusOK, user)
 }
 
-// 資金追加
+// Deposit は入金処理
 func Deposit(c *gin.Context) {
 	authID, ok := getAuthID(c)
 	if !ok {
@@ -77,6 +78,7 @@ func Deposit(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "資金追加に失敗しました"})
+		return
 	}
 
 	c.JSON(http.StatusOK, user)

@@ -28,6 +28,10 @@ func SetupRoutes(r *gin.Engine) {
 			// セッション
 			auth.POST("/session/start", handlers.StartSession)
 			auth.POST("/session/reset", handlers.ResetSession)
+			auth.POST("/session/target", handlers.UpdateTarget)
+			auth.GET("/sessions", handlers.GetSessionList)
+			auth.GET("/sessions/:id/trades", handlers.GetSessionTrades)
+			auth.DELETE("/sessions/:id", handlers.DeleteSession)
 
 			// トレード
 			auth.POST("/trade/buy", handlers.BuyCoin)
@@ -36,7 +40,6 @@ func SetupRoutes(r *gin.Engine) {
 			auth.GET("/holdings/pnl", handlers.GetHoldingsPnL)
 			auth.GET("/trades", handlers.GetTrades)
 			auth.POST("/trade/target-pnl", handlers.GetTargetPnL)
-			auth.POST("/trade/update-target", handlers.UpdateTarget)
 		}
 	}
 }
