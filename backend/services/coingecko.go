@@ -49,7 +49,7 @@ func FetchAndStoreCoinsIfStale() error {
 // fetchAndStoreCoins はCoinGeckoからデータを取得してDBに保存します（内部用）
 func fetchAndStoreCoins() error {
 	// 取得したい通貨のID（Figmaに合わせて主要なものを選定）
-	ids := "bitcoin,ethereum,ripple,solana,dogecoin,cardano,polkadot,tron,chainlink,polygon"
+	ids := "bitcoin,ethereum,solana,ripple,lisk"
 	url := fmt.Sprintf("https://api.coingecko.com/api/v3/coins/markets?vs_currency=jpy&ids=%s&price_change_percentage=24h,7d,1y", ids)
 
 	resp, err := http.Get(url)

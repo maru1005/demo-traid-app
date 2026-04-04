@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
 
 // コンポーネントのインポート
-import { CryptoSelector } from "@/components/CryptoSelector";
 import { CryptoDetail } from "@/components/CryptoDetail";
 import { AIAnalysis } from "@/components/AIAnalysis";
 import { Coin, PriceHistoryPoint } from "@/types/coin";
@@ -137,17 +136,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* 1. セレクター部分 */}
-        <CryptoSelector
-          cryptos={coins}
-          selectedCrypto={selectedCoin}
-          onSelect={setSelectedCoin}
-        />
-
-        {/* 2. 詳細・チャート部分 */}
+        {/* 詳細・チャート部分（銘柄選択統合済み） */}
         {selectedCoin && (
           <CryptoDetail
             crypto={selectedCoin}
+            coins={coins}
+            onCoinSelect={setSelectedCoin}
             priceHistory={priceHistory}
             priceChange7d={change7d}
             priceChange1y={change1y}

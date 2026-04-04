@@ -2,31 +2,23 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { Coin, User, HoldingPnL, Trade } from "@/types";
 import { apiClient } from "@/lib/apiClient";
 import { TradeSimulator } from "@/components/TradeSimulator";
 import { TargetPnLCard } from "@/components/TargetPnLCard";
-import { CoinSelector } from "@/components/CoinSelector";
 import { Onboarding } from "@/components/Onboarding";
+import { TradeForm } from "@/components/TradeForm";
+import { AssetCard } from "@/components/AssetCard";
 
 type PageState = "loading" | "onboarding" | "trading" | "achieved";
 
 export default function TradePage() {
   const [pageState, setPageState] = useState<PageState>("loading");
   const [coins, setCoins] = useState<Coin[]>([]);
-  const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
   const [holdingsPnL, setHoldingsPnL] = useState<HoldingPnL[]>([]);
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [amount, setAmount] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  const [depositAmount, setDepositAmount] = useState("");
-  const [showDeposit, setShowDeposit] = useState(false);
 
   // リセットモーダル
   const [showReset, setShowReset] = useState(false);
@@ -42,7 +34,6 @@ export default function TradePage() {
   const fetchUser = useCallback(async () => {
     const data = await apiClient.getUser();
     setUser(data);
-    // セッション未開始（initial_balanceが0）ならオンボーディング
     if (!data || data.initial_balance === 0 || data.session_id === 0) {
       setPageState("onboarding");
     } else {
@@ -53,7 +44,6 @@ export default function TradePage() {
   const fetchCoins = useCallback(async () => {
     const data = await apiClient.getCoins();
     setCoins(data);
-    if (data.length > 0) setSelectedCoin(data[0]);
   }, []);
 
   const fetchHoldingsPnL = useCallback(async () => {
@@ -73,7 +63,6 @@ export default function TradePage() {
     fetchRecentTrades();
   }, [fetchUser, fetchCoins, fetchHoldingsPnL, fetchRecentTrades]);
 
-  // 総資産 = 残高 + 保有コイン時価
   const totalAssets = useMemo(() => {
     const holdingsValue = holdingsPnL.reduce(
       (sum, h) => sum + h.current_price * h.amount,
@@ -82,51 +71,15 @@ export default function TradePage() {
     return (user?.balance ?? 0) + holdingsValue;
   }, [user, holdingsPnL]);
 
-  // 現在の損益（総資産ベース）
   const currentPnL = useMemo(() => {
     return holdingsPnL.reduce((sum, h) => sum + h.pnl, 0);
   }, [holdingsPnL]);
 
-  // 目標達成判定: 総資産 >= 初期残高 + 目標損益
   useEffect(() => {
     if (pageState !== "trading" || !user || user.initial_balance === 0) return;
     const isAchieved = totalAssets >= user.total_deposited + user.target_pnl;
     if (isAchieved) setPageState("achieved");
   }, [totalAssets, user, pageState]);
-
-  const handleDeposit = async () => {
-    if (!depositAmount) return;
-    await apiClient.deposit({ amount: parseFloat(depositAmount) });
-    setDepositAmount("");
-    setShowDeposit(false);
-    fetchUser();
-  };
-
-  const handleTrade = async (type: "buy" | "sell") => {
-    if (!selectedCoin || !amount) return;
-    setLoading(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const fn = type === "buy" ? apiClient.buy : apiClient.sell;
-      const data = await fn({
-        coin_id: selectedCoin.id,
-        coin_name: selectedCoin.name,
-        amount: parseFloat(amount),
-        price: selectedCoin.current_price,
-      });
-      setMessage(data.message);
-      setAmount("");
-      fetchUser();
-      fetchHoldingsPnL();
-      fetchRecentTrades();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラーが発生しました");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleReset = async () => {
     const balance = parseFloat(resetBalance);
@@ -171,12 +124,6 @@ export default function TradePage() {
     }
   };
 
-  const estimatedTradeTotal =
-    selectedCoin && amount
-      ? parseFloat(amount) * selectedCoin.current_price
-      : 0;
-
-  // ローディング中
   if (pageState === "loading") {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
@@ -185,7 +132,6 @@ export default function TradePage() {
     );
   }
 
-  // オンボーディング
   if (pageState === "onboarding") {
     return (
       <Onboarding
@@ -252,41 +198,11 @@ export default function TradePage() {
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* 上段：総資産 + 目標損益 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg">
-            <p className="text-indigo-100 text-sm font-bold">総資産</p>
-            <p className="text-4xl font-black mt-1">
-              ¥{totalAssets.toLocaleString()}
-            </p>
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-indigo-200 text-xs">
-                利用可能残高: ¥{(user?.balance ?? 0).toLocaleString()}
-              </p>
-              <button
-                onClick={() => setShowDeposit((v) => !v)}
-                className="text-xs font-bold text-indigo-200 hover:text-white transition-colors"
-              >
-                {showDeposit ? "▲ 閉じる" : "＋ 入金"}
-              </button>
-            </div>
-
-            {showDeposit && (
-              <div className="mt-4 space-y-2">
-                <input
-                  type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="例: 100000"
-                  className="w-full bg-white/20 text-white placeholder-indigo-300 border border-white/30 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/50"
-                />
-                <button
-                  onClick={handleDeposit}
-                  className="w-full bg-white text-indigo-600 py-2 rounded-xl font-bold hover:bg-indigo-50 transition-colors"
-                >
-                  入金する
-                </button>
-              </div>
-            )}
-          </div>
+          <AssetCard
+            user={user}
+            holdingsPnL={holdingsPnL}
+            onDepositComplete={fetchUser}
+          />
 
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
@@ -308,64 +224,14 @@ export default function TradePage() {
 
         {/* 中段：トレード + シミュレーター */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-            <h2 className="font-bold text-gray-900">トレード</h2>
-
-            <CoinSelector
-              coins={coins}
-              selectedCoin={selectedCoin}
-              onChange={setSelectedCoin}
-            />
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">数量</label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="例: 0.001"
-                step="0.0001"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              {estimatedTradeTotal > 0 && (
-                <p className="text-sm text-gray-500">
-                  合計:{" "}
-                  <span className="font-bold text-gray-900">
-                    ¥{estimatedTradeTotal.toLocaleString()}
-                  </span>
-                </p>
-              )}
-            </div>
-
-            {error && (
-              <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-center gap-2 text-rose-600">
-                <AlertCircle className="w-4 h-4" />
-                <p className="text-sm font-bold">{error}</p>
-              </div>
-            )}
-            {message && (
-              <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-emerald-600">
-                <p className="text-sm font-bold">{message}</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => handleTrade("buy")}
-                disabled={loading}
-                className="py-4 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-600 transition-colors disabled:opacity-50"
-              >
-                BUY
-              </button>
-              <button
-                onClick={() => handleTrade("sell")}
-                disabled={loading}
-                className="py-4 rounded-xl font-black text-white bg-rose-500 hover:bg-rose-600 transition-colors disabled:opacity-50"
-              >
-                SELL
-              </button>
-            </div>
-          </div>
+          <TradeForm
+            coins={coins}
+            onTradeComplete={() => {
+              fetchUser();
+              fetchHoldingsPnL();
+              fetchRecentTrades();
+            }}
+          />
 
           <div className="lg:sticky lg:top-24">
             <TradeSimulator holdings={holdingsPnL} coins={coins} />
@@ -438,7 +304,6 @@ export default function TradePage() {
                 保有コインと残高はそのままで目標だけ変更します
               </p>
             </div>
-
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">
                 新しい目標損益
@@ -456,7 +321,6 @@ export default function TradePage() {
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setShowUpdateTarget(false)}
@@ -486,7 +350,6 @@ export default function TradePage() {
                 新しい初期資金と目標損益を入力してください
               </p>
             </div>
-
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-gray-700">
@@ -505,7 +368,6 @@ export default function TradePage() {
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
                 <label className="text-sm font-bold text-gray-700">
                   目標損益
@@ -524,7 +386,6 @@ export default function TradePage() {
                 </div>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setShowReset(false)}

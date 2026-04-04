@@ -1,6 +1,7 @@
 // src/components/CryptoDetail.tsx
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -10,13 +11,15 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
+import { TrendingUp, TrendingDown, Calendar, ChevronDown } from "lucide-react";
 import Image from "next/image";
 import { Coin, PriceHistoryPoint } from "@/types/coin";
 import type { HistoryDays } from "@/types/api";
 
 interface CryptoDetailProps {
   crypto: Coin;
+  coins: Coin[];
+  onCoinSelect: (coin: Coin) => void;
   priceHistory: PriceHistoryPoint[];
   priceChange7d: number;
   priceChange1y: number;
@@ -32,17 +35,35 @@ const PERIOD_OPTIONS: { label: string; value: HistoryDays }[] = [
 
 export function CryptoDetail({
   crypto,
+  coins,
+  onCoinSelect,
   priceHistory,
   priceChange7d,
   priceChange1y,
   historyDays,
   onHistoryDaysChange,
 }: CryptoDetailProps) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("ja-JP", {
       style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
+      currency: "JPY",
+      minimumFractionDigits: 0,
     }).format(price);
   };
 
@@ -53,36 +74,86 @@ export function CryptoDetail({
   };
 
   const formatMarketCap = (value: number) => {
-    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    return `$${(value / 1e6).toFixed(2)}M`;
+    if (value >= 1e12) return `¥${(value / 1e12).toFixed(2)}T`;
+    if (value >= 1e9) return `¥${(value / 1e9).toFixed(2)}B`;
+    return `¥${(value / 1e6).toFixed(2)}M`;
   };
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6 shadow-sm">
-      <div className="flex items-center gap-4">
-        {crypto.image && (
-          <div className="relative w-16 h-16">
-            <Image
-              src={crypto.image}
-              alt={crypto.name}
-              fill
-              sizes="64px"
-              className="object-contain"
+      {/* ヘッダー: 銘柄選択ドロップダウン + 現在価格 */}
+      <div className="flex items-center justify-between">
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setShowDropdown((v) => !v)}
+            className="flex items-center gap-2 hover:bg-gray-50 rounded-xl px-3 py-2 -ml-3 transition-colors"
+          >
+            <div className="relative w-8 h-8 flex-shrink-0">
+              {crypto.image && (
+                <Image
+                  src={crypto.image}
+                  alt={crypto.name}
+                  fill
+                  sizes="32px"
+                  className="object-contain"
+                />
+              )}
+            </div>
+            <span className="text-xl font-bold text-gray-900">
+              {crypto.name}
+            </span>
+            <ChevronDown
+              className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${showDropdown ? "rotate-180" : ""}`}
             />
-          </div>
-        )}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">{crypto.name}</h2>
-          <p className="text-gray-500 uppercase font-medium">{crypto.symbol}</p>
-        </div>
-      </div>
+          </button>
 
-      <div>
-        <p className="text-gray-500 text-sm font-medium">現在価格</p>
-        <p className="text-4xl font-black text-gray-900">
-          {formatPrice(crypto.current_price)}
-        </p>
+          {showDropdown && (
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 min-w-[200px] overflow-hidden">
+              {coins.map((coin) => (
+                <button
+                  key={coin.id}
+                  onClick={() => {
+                    onCoinSelect(coin);
+                    setShowDropdown(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${
+                    coin.id === crypto.id ? "bg-indigo-50" : ""
+                  }`}
+                >
+                  {coin.image && (
+                    <div className="relative w-6 h-6 flex-shrink-0">
+                      <Image
+                        src={coin.image}
+                        alt={coin.name}
+                        fill
+                        sizes="24px"
+                        className="object-contain"
+                      />
+                    </div>
+                  )}
+                  <span className="font-bold text-gray-900 text-sm">
+                    {coin.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="text-right">
+          <p className="text-2xl font-black text-gray-900">
+            {formatPrice(crypto.current_price)}
+          </p>
+          <p
+            className={`text-sm font-bold ${
+              crypto.price_change_percentage_24h >= 0
+                ? "text-emerald-600"
+                : "text-rose-500"
+            }`}
+          >
+            {formatPercentage(crypto.price_change_percentage_24h)}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -112,20 +183,15 @@ export function CryptoDetail({
         ))}
       </div>
 
-      <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex justify-between items-center">
-        <div>
-          <p className="text-xs text-gray-500 font-bold mb-1">時価総額</p>
-          <p className="font-bold text-gray-900">
-            {formatMarketCap(crypto.market_cap)}
-          </p>
-        </div>
-        <div className="text-right text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-          RANK #{crypto.market_cap_rank}
-        </div>
+      <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+        <p className="text-xs text-gray-500 font-bold mb-1">時価総額</p>
+        <p className="font-bold text-gray-900">
+          {formatMarketCap(crypto.market_cap)}
+        </p>
       </div>
 
       <div className="pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div className="flex flex-wrap items-center gap-4 mb-4">
           <h3 className="font-bold text-gray-800 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-indigo-500" /> 価格推移
           </h3>
@@ -171,7 +237,6 @@ export function CryptoDetail({
                   const priceText = isNaN(numericVal)
                     ? String(val)
                     : formatPrice(numericVal);
-                  // [表示する値, ラベル] の形式であることを型アサーションで教える
                   return [priceText, "価格"] as [string, string];
                 }}
               />

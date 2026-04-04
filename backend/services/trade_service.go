@@ -256,6 +256,7 @@ func SellCoin(userID uint, coinID, coinName string, amount, price float64) error
 }
 
 // CalculateHoldingsPnL 保有コインの損益計算
+// DBにキャッシュ済みのコイン価格を使用（CoinGecko直接呼び出しを回避）
 func CalculateHoldingsPnL(userID uint) ([]HoldingPnL, error) {
 	var holdings []models.Holding
 	if err := database.DB.Where("user_id = ?", userID).Find(&holdings).Error; err != nil {
@@ -270,9 +271,14 @@ func CalculateHoldingsPnL(userID uint) ([]HoldingPnL, error) {
 		coinIDs[i] = h.CoinID
 	}
 
-	prices, err := FetchCurrentPrices(coinIDs)
-	if err != nil {
+	// DBキャッシュから価格を取得（CoinGeckoレート制限を回避）
+	var coins []models.Coin
+	if err := database.DB.Where("id IN ?", coinIDs).Find(&coins).Error; err != nil {
 		return nil, err
+	}
+	prices := make(map[string]float64, len(coins))
+	for _, c := range coins {
+		prices[c.ID] = c.CurrentPrice
 	}
 
 	result := make([]HoldingPnL, 0, len(holdings))
