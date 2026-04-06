@@ -2,16 +2,27 @@
 // トレードフォーム
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Coin, HoldingPnL } from "@/types";
 import { CoinSelector } from "@/components/CoinSelector";
+
+type TradeType = "buy" | "sell";
+
+export type SimulatorState = {
+  coin: Coin | null;
+  tradeType: TradeType;
+  holding?: {
+    amount: number;
+    avgPrice: number;
+    pnl: number;
+  };
+};
 
 type Props = {
   holdings: HoldingPnL[];
   coins: Coin[];
+  onSimulatorChange?: (state: SimulatorState) => void;
 };
-
-type TradeType = "buy" | "sell";
 
 type BuyResult = {
   type: "buy";
@@ -29,7 +40,7 @@ type SellResult = {
 
 type SimulationResult = BuyResult | SellResult | null;
 
-export const TradeSimulator = ({ holdings, coins }: Props) => {
+export const TradeSimulator = ({ holdings, coins, onSimulatorChange }: Props) => {
   const [tradeType, setTradeType] = useState<TradeType>("buy");
   const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
   const [amount, setAmount] = useState("");
@@ -39,15 +50,17 @@ export const TradeSimulator = ({ holdings, coins }: Props) => {
     name: h.coin_name,
     current_price: h.current_price,
     image: coins.find((c) => c.id === h.coin_id)?.image ?? "",
-    symbol: "",
+    symbol: coins.find((c) => c.id === h.coin_id)?.symbol ?? "",
     market_cap: 0,
     market_cap_rank: 0,
-    price_change_percentage_24h: 0,
+    price_change_percentage_24h: coins.find((c) => c.id === h.coin_id)?.price_change_percentage_24h ?? 0,
     price_change_percentage_7d_in_currency: 0,
     price_change_percentage_1y_in_currency: 0,
   }));
 
   const selectableCoins = tradeType === "buy" ? coins : sellableCoins;
+
+  const selectedHolding = holdings.find((h) => h.coin_id === selectedCoin?.id);
 
   const handleTradeTypeChange = (type: TradeType) => {
     setTradeType(type);
@@ -60,7 +73,22 @@ export const TradeSimulator = ({ holdings, coins }: Props) => {
     setAmount("");
   };
 
-  const selectedHolding = holdings.find((h) => h.coin_id === selectedCoin?.id);
+  useEffect(() => {
+    if (!onSimulatorChange) return;
+    onSimulatorChange({
+      coin: selectedCoin,
+      tradeType,
+      holding:
+        tradeType === "sell" && selectedHolding
+          ? {
+              amount: selectedHolding.amount,
+              avgPrice: selectedHolding.avg_price,
+              pnl: selectedHolding.pnl,
+            }
+          : undefined,
+    });
+  }, [selectedCoin, tradeType, selectedHolding, onSimulatorChange]);
+
   const currentPrice = selectedCoin?.current_price ?? 0;
   const parsedAmount = parseFloat(amount) || 0;
 

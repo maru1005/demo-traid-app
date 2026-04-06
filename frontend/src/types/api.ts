@@ -53,6 +53,14 @@ export interface GetAnalyzeParams {
   name: string;
   price: number;
   change: number;
+  trade_type: "buy" | "sell";
+  balance?: number;
+  remaining?: number;
+  change_7d?: number;
+  change_1y?: number;
+  holding_amount?: number;
+  avg_price?: number;
+  pnl?: number;
 }
 
 /** 価格履歴の取得期間（days） */
@@ -99,8 +107,17 @@ export interface ApiErrorResponse {
 export function buildApiUrl(baseUrl: string) {
   return {
     coins: () => `${baseUrl}${API_PATHS.coins}`,
-    analyze: (params: GetAnalyzeParams) =>
-      `${baseUrl}${API_PATHS.analyze}?name=${encodeURIComponent(params.name)}&price=${params.price}&change=${params.change}`,
+    analyze: (params: GetAnalyzeParams) => {
+      let url = `${baseUrl}${API_PATHS.analyze}?name=${encodeURIComponent(params.name)}&price=${params.price}&change=${params.change}&trade_type=${params.trade_type}`;
+      if (params.balance !== undefined) url += `&balance=${params.balance}`;
+      if (params.remaining !== undefined) url += `&remaining=${params.remaining}`;
+      if (params.change_7d !== undefined) url += `&change_7d=${params.change_7d}`;
+      if (params.change_1y !== undefined) url += `&change_1y=${params.change_1y}`;
+      if (params.holding_amount !== undefined) url += `&holding_amount=${params.holding_amount}`;
+      if (params.avg_price !== undefined) url += `&avg_price=${params.avg_price}`;
+      if (params.pnl !== undefined) url += `&pnl=${params.pnl}`;
+      return url;
+    },
     history: (params: GetHistoryParams) => {
       const days = params.days ?? 365;
       return `${baseUrl}${API_PATHS.history}?id=${encodeURIComponent(params.id)}&days=${days}`;

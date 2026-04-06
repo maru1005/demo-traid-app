@@ -3,12 +3,17 @@ package services
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 )
+
+//go:embed prompts/analyze.md
+var analyzePromptTemplate string
 
 // Gemini APIのリクエスト構造体
 type geminiRequest struct {
@@ -34,26 +39,59 @@ type geminiResponse struct {
 	} `json:"candidates"`
 }
 
-func GetAIAnalysis(coinName string, price float64, change24h float64) (string, error) {
-	// 1. .envからGeminiのAPIキーを取得
+type AnalysisParams struct {
+	CoinName      string
+	Price         float64
+	Change24h     float64
+	Change7d      float64
+	Change1y      float64
+	TradeType     string
+	Balance       float64
+	Remaining     float64
+	HoldingAmount *float64
+	AvgPrice      *float64
+	PnL           *float64
+}
+
+func GetAIAnalysis(params AnalysisParams) (string, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("GEMINI_API_KEY が設定されていません")
 	}
 
-	// 2. エンドポイントURL（gemini-2.0-flash-lite: 無料枠あり・高速）
 	url := fmt.Sprintf(
 		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s",
 		apiKey,
 	)
 
-	// 3. プロンプトの作成
-	prompt := fmt.Sprintf(
-		"あなたはプロの仮想通貨アナリストです。%s (¥%.2f, 変動率 %.2f%%) の今後の見通しを200文字程度の日本語でポジティブに分析してください。",
-		coinName, price, change24h,
-	)
+	tradeType := params.TradeType
+	if tradeType == "" {
+		tradeType = "buy"
+	}
+	tradeLabel := "BUY（購入）"
+	if tradeType == "sell" {
+		tradeLabel = "SELL（売却）"
+	}
 
-	// 4. リクエストボディの作成
+	holdingBlock := ""
+	if tradeType == "sell" && params.HoldingAmount != nil && params.AvgPrice != nil && params.PnL != nil {
+		holdingBlock = fmt.Sprintf(
+			"## 保有情報\n- 保有量: %.4f枚\n- 取得単価: %.2f円\n- 含み損益: %.2f円",
+			*params.HoldingAmount, *params.AvgPrice, *params.PnL,
+		)
+	}
+
+	prompt := analyzePromptTemplate
+	prompt = strings.ReplaceAll(prompt, "{{name}}", params.CoinName)
+	prompt = strings.ReplaceAll(prompt, "{{price}}", fmt.Sprintf("%.2f", params.Price))
+	prompt = strings.ReplaceAll(prompt, "{{change_24h}}", fmt.Sprintf("%.2f", params.Change24h))
+	prompt = strings.ReplaceAll(prompt, "{{change_7d}}", fmt.Sprintf("%.2f", params.Change7d))
+	prompt = strings.ReplaceAll(prompt, "{{change_1y}}", fmt.Sprintf("%.2f", params.Change1y))
+	prompt = strings.ReplaceAll(prompt, "{{trade_type}}", tradeLabel)
+	prompt = strings.ReplaceAll(prompt, "{{balance}}", fmt.Sprintf("%.0f", params.Balance))
+	prompt = strings.ReplaceAll(prompt, "{{remaining}}", fmt.Sprintf("%.0f", params.Remaining))
+	prompt = strings.ReplaceAll(prompt, "{{holding_block}}", holdingBlock)
+
 	reqBody := geminiRequest{
 		Contents: []geminiContent{
 			{Parts: []geminiPart{{Text: prompt}}},
@@ -64,7 +102,6 @@ func GetAIAnalysis(coinName string, price float64, change24h float64) (string, e
 		return "", err
 	}
 
-	// 5. HTTPリクエストの送信
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return "", err
@@ -76,7 +113,6 @@ func GetAIAnalysis(coinName string, price float64, change24h float64) (string, e
 		return "", fmt.Errorf("Gemini APIエラー (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	// 6. レスポンスの解析
 	var result geminiResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", err

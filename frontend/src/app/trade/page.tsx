@@ -3,13 +3,13 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Coin, User, HoldingPnL, Trade } from "@/types";
+import { Coin, User, HoldingPnL } from "@/types";
 import { apiClient } from "@/lib/apiClient";
-import { TradeSimulator } from "@/components/TradeSimulator";
 import { TargetPnLCard } from "@/components/TargetPnLCard";
 import { Onboarding } from "@/components/Onboarding";
 import { TradeForm } from "@/components/TradeForm";
 import { AssetCard } from "@/components/AssetCard";
+import { SimulatorWithAnalysis } from "@/components/SimulatorWithAnalysis";
 
 type PageState = "loading" | "onboarding" | "trading" | "achieved";
 
@@ -17,9 +17,7 @@ export default function TradePage() {
   const [pageState, setPageState] = useState<PageState>("loading");
   const [coins, setCoins] = useState<Coin[]>([]);
   const [holdingsPnL, setHoldingsPnL] = useState<HoldingPnL[]>([]);
-  const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [user, setUser] = useState<User | null>(null);
-
   // リセットモーダル
   const [showReset, setShowReset] = useState(false);
   const [resetBalance, setResetBalance] = useState("");
@@ -51,17 +49,11 @@ export default function TradePage() {
     setHoldingsPnL(data);
   }, []);
 
-  const fetchRecentTrades = useCallback(async () => {
-    const data = await apiClient.getTrades();
-    setRecentTrades(data.slice(0, 5));
-  }, []);
-
   useEffect(() => {
     fetchUser();
     fetchCoins();
     fetchHoldingsPnL();
-    fetchRecentTrades();
-  }, [fetchUser, fetchCoins, fetchHoldingsPnL, fetchRecentTrades]);
+  }, [fetchUser, fetchCoins, fetchHoldingsPnL]);
 
   const totalAssets = useMemo(() => {
     const holdingsValue = holdingsPnL.reduce(
@@ -98,7 +90,6 @@ export default function TradePage() {
       setPageState("trading");
       fetchUser();
       fetchHoldingsPnL();
-      fetchRecentTrades();
     } catch (e) {
       console.error(e);
     } finally {
@@ -138,7 +129,6 @@ export default function TradePage() {
         onComplete={() => {
           fetchUser();
           fetchHoldingsPnL();
-          fetchRecentTrades();
         }}
       />
     );
@@ -196,100 +186,45 @@ export default function TradePage() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-        {/* 上段：総資産 + 目標損益 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <AssetCard
-            user={user}
-            holdingsPnL={holdingsPnL}
-            onDepositComplete={fetchUser}
-          />
-
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-gray-900">目標損益</h2>
-              <button
-                onClick={() => setShowReset(true)}
-                className="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                リセット
-              </button>
+        {/* 上段：左（AssetCard + TargetPnLCard）/ 右（TradeForm） */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="space-y-4">
+            <AssetCard
+              user={user}
+              holdingsPnL={holdingsPnL}
+              onDepositComplete={fetchUser}
+            />
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="font-bold text-gray-900">目標損益</h2>
+                <button
+                  onClick={() => setShowReset(true)}
+                  className="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  リセット
+                </button>
+              </div>
+              <TargetPnLCard
+                targetPnL={user?.target_pnl ?? 0}
+                currentPnL={currentPnL}
+                onChange={() => {}}
+              />
             </div>
-            <TargetPnLCard
-              targetPnL={user?.target_pnl ?? 0}
-              currentPnL={currentPnL}
-              onChange={() => {}}
+          </div>
+
+          <div className="lg:sticky lg:top-24">
+            <TradeForm
+              coins={coins}
+              onTradeComplete={() => {
+                fetchUser();
+                fetchHoldingsPnL();
+              }}
             />
           </div>
         </div>
 
-        {/* 中段：トレード + シミュレーター */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <TradeForm
-            coins={coins}
-            onTradeComplete={() => {
-              fetchUser();
-              fetchHoldingsPnL();
-              fetchRecentTrades();
-            }}
-          />
-
-          <div className="lg:sticky lg:top-24">
-            <TradeSimulator holdings={holdingsPnL} coins={coins} />
-          </div>
-        </div>
-
-        {/* 直近5件の取引 */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-          <h2 className="font-bold text-gray-900 mb-4">直近の取引</h2>
-          {recentTrades.length === 0 ? (
-            <p className="text-sm text-gray-400">取引履歴がありません</p>
-          ) : (
-            <div className="space-y-2">
-              {recentTrades.map((trade) => {
-                const isBuy = trade.type === "buy";
-                const isDeposit = trade.type === "deposit";
-                return (
-                  <div
-                    key={trade.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`text-xs font-black px-2 py-1 rounded-md ${
-                          isDeposit
-                            ? "bg-indigo-100 text-indigo-600"
-                            : isBuy
-                              ? "bg-emerald-100 text-emerald-600"
-                              : "bg-rose-100 text-rose-500"
-                        }`}
-                      >
-                        {isDeposit ? "入金" : isBuy ? "BUY" : "SELL"}
-                      </span>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">
-                          {trade.coin_name}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(trade.created_at).toLocaleString("ja-JP")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">
-                        ¥{trade.total.toLocaleString()}
-                      </p>
-                      {!isDeposit && (
-                        <p className="text-xs text-gray-400">
-                          {trade.amount}枚 @ ¥{trade.price.toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* 下段：シミュレーター + AI分析（統合、全幅） */}
+        <SimulatorWithAnalysis coins={coins} holdings={holdingsPnL} user={user} />
       </main>
 
       {/* 目標再設定モーダル（続けるケース） */}

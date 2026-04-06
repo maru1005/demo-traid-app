@@ -6,13 +6,11 @@ import { TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
 
 // コンポーネントのインポート
 import { CryptoDetail } from "@/components/CryptoDetail";
-import { AIAnalysis } from "@/components/AIAnalysis";
 import { Coin, PriceHistoryPoint } from "@/types/coin";
 import {
   buildApiUrl,
   type GetCoinsResponse,
   type GetHistoryResponse,
-  type GetAnalyzeResponse,
   type HistoryDays,
 } from "@/types/api";
 import { API_BASE_URL } from "@/lib/config";
@@ -79,21 +77,6 @@ export default function Home() {
     [api],
   );
 
-  // --- 3. GoのGemini APIを呼び出す関数 (AIAnalysisに渡す用) ---
-  const handleAnalyze = async (): Promise<string> => {
-    if (!selectedCoin) return "";
-
-    const res = await fetch(
-      api.analyze({
-        name: selectedCoin.name,
-        price: selectedCoin.current_price,
-        change: selectedCoin.price_change_percentage_24h,
-      }),
-    );
-    const data: GetAnalyzeResponse = await res.json();
-    return data.analysis;
-  };
-
   useEffect(() => {
     fetchCoins();
   }, [fetchCoins]);
@@ -150,16 +133,7 @@ export default function Home() {
           />
         )}
 
-        {/* 3. AI分析部分 */}
-        {selectedCoin && (
-          <AIAnalysis
-            crypto={selectedCoin}
-            priceChange24h={selectedCoin.price_change_percentage_24h}
-            priceChange7d={change7d}
-            priceChange1y={change1y}
-            onAnalyze={handleAnalyze}
-          />
-        )}
+
       </main>
     </div>
   );

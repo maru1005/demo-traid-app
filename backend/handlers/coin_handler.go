@@ -32,13 +32,40 @@ func GetCoins(c *gin.Context) {
 // 2. AI分析ハンドラー
 func AnalyzeCoin(c *gin.Context) {
 	name := c.Query("name")
-	priceStr := c.Query("price")
-	changeStr := c.Query("change")
+	price, _ := strconv.ParseFloat(c.Query("price"), 64)
+	change, _ := strconv.ParseFloat(c.Query("change"), 64)
+	tradeType := c.Query("trade_type")
 
-	price, _ := strconv.ParseFloat(priceStr, 64)
-	change, _ := strconv.ParseFloat(changeStr, 64)
+	params := services.AnalysisParams{
+		CoinName:  name,
+		Price:     price,
+		Change24h: change,
+		TradeType: tradeType,
+	}
 
-	analysis, err := services.GetAIAnalysis(name, price, change)
+	if v, err := strconv.ParseFloat(c.Query("balance"), 64); err == nil {
+		params.Balance = v
+	}
+	if v, err := strconv.ParseFloat(c.Query("remaining"), 64); err == nil {
+		params.Remaining = v
+	}
+	if v, err := strconv.ParseFloat(c.Query("change_7d"), 64); err == nil {
+		params.Change7d = v
+	}
+	if v, err := strconv.ParseFloat(c.Query("change_1y"), 64); err == nil {
+		params.Change1y = v
+	}
+	if v, err := strconv.ParseFloat(c.Query("holding_amount"), 64); err == nil {
+		params.HoldingAmount = &v
+	}
+	if v, err := strconv.ParseFloat(c.Query("avg_price"), 64); err == nil {
+		params.AvgPrice = &v
+	}
+	if v, err := strconv.ParseFloat(c.Query("pnl"), 64); err == nil {
+		params.PnL = &v
+	}
+
+	analysis, err := services.GetAIAnalysis(params)
 	if err != nil {
 		fmt.Println("--------------------------------------------------")
 		fmt.Printf("🚨 GEMINI SERVICE ERROR: %v\n", err)

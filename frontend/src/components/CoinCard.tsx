@@ -26,6 +26,7 @@ export default function CoinCard({ coin }: CoinCardProps) {
           name: coin.name,
           price: coin.current_price,
           change: coin.price_change_percentage_24h,
+          trade_type: "buy",
         }),
       );
       const data: GetAnalyzeResponse = await response.json();
