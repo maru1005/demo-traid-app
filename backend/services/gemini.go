@@ -15,28 +15,23 @@ import (
 //go:embed prompts/analyze.md
 var analyzePromptTemplate string
 
-// Gemini APIのリクエスト構造体
-type geminiRequest struct {
-	Contents []geminiContent `json:"contents"`
+type openAIRequest struct {
+	Model     string          `json:"model"`
+	Messages  []openAIMessage `json:"messages"`
+	MaxTokens int             `json:"max_tokens"`
 }
 
-type geminiContent struct {
-	Parts []geminiPart `json:"parts"`
+type openAIMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
-type geminiPart struct {
-	Text string `json:"text"`
-}
-
-// Gemini APIのレスポンス構造体
-type geminiResponse struct {
-	Candidates []struct {
-		Content struct {
-			Parts []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"content"`
-	} `json:"candidates"`
+type openAIResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
 }
 
 type AnalysisParams struct {
@@ -54,15 +49,12 @@ type AnalysisParams struct {
 }
 
 func GetAIAnalysis(params AnalysisParams) (string, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		return "", fmt.Errorf("GEMINI_API_KEY が設定されていません")
+		return "", fmt.Errorf("OPENAI_API_KEY が設定されていません")
 	}
 
-	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s",
-		apiKey,
-	)
+	url := "https://api.openai.com/v1/chat/completions"
 
 	tradeType := params.TradeType
 	if tradeType == "" {
@@ -92,17 +84,27 @@ func GetAIAnalysis(params AnalysisParams) (string, error) {
 	prompt = strings.ReplaceAll(prompt, "{{remaining}}", fmt.Sprintf("%.0f", params.Remaining))
 	prompt = strings.ReplaceAll(prompt, "{{holding_block}}", holdingBlock)
 
-	reqBody := geminiRequest{
-		Contents: []geminiContent{
-			{Parts: []geminiPart{{Text: prompt}}},
+	reqBody := openAIRequest{
+		Model: "gpt-4o-mini",
+		Messages: []openAIMessage{
+			{Role: "user", Content: prompt},
 		},
+		MaxTokens: 500,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -110,16 +112,16 @@ func GetAIAnalysis(params AnalysisParams) (string, error) {
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Gemini APIエラー (status %d): %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("AI APIエラー (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	var result geminiResponse
+	var result openAIResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", err
 	}
 
-	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
-		return result.Candidates[0].Content.Parts[0].Text, nil
+	if len(result.Choices) > 0 {
+		return result.Choices[0].Message.Content, nil
 	}
 
 	return "分析結果が得られませんでした。", nil

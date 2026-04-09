@@ -212,12 +212,11 @@ export function CryptoDetail({
           </div>
         </div>
         <div className="w-full min-w-0">
-          <ResponsiveContainer
-            key={`${crypto.id}-${historyDays}`}
-            width="100%"
-            height={256}
-          >
-            <LineChart data={priceHistory}>
+          <ResponsiveContainer width="100%" height={256}>
+            <LineChart
+              key={`${crypto.id}-${historyDays}`}
+              data={priceHistory}
+            >
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}

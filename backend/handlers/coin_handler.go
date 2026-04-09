@@ -68,7 +68,7 @@ func AnalyzeCoin(c *gin.Context) {
 	analysis, err := services.GetAIAnalysis(params)
 	if err != nil {
 		fmt.Println("--------------------------------------------------")
-		fmt.Printf("🚨 GEMINI SERVICE ERROR: %v\n", err)
+		fmt.Printf("🚨 AI SERVICE ERROR: %v\n", err)
 		fmt.Println("--------------------------------------------------")
 
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

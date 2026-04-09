@@ -33,16 +33,15 @@ func FetchAndStoreCoinsIfStale() error {
 		fetchMu.Unlock()
 		return nil
 	}
-	fetchMu.Unlock()
+	// fetchAndStoreCoins が完了するまでロックを保持して並行fetch防止
+	defer fetchMu.Unlock()
 
 	err := fetchAndStoreCoins()
 	if err != nil {
 		return err
 	}
 
-	fetchMu.Lock()
 	lastFetchTime = time.Now()
-	fetchMu.Unlock()
 	return nil
 }
 
@@ -58,16 +57,27 @@ func fetchAndStoreCoins() error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("CoinGecko APIエラー (status %d)", resp.StatusCode)
+	}
+
 	var coins []models.Coin
 	if err := json.NewDecoder(resp.Body).Decode(&coins); err != nil {
-		return err
+		return fmt.Errorf("CoinGeckoレスポンスのデコード失敗: %w", err)
+	}
+
+	if len(coins) == 0 {
+		return fmt.Errorf("CoinGeckoから0件のコインが返されました")
 	}
 
 	// DBに保存（存在すれば更新、なければ作成：Upsert）
 	for _, coin := range coins {
-		database.DB.Save(&coin)
+		if err := database.DB.Save(&coin).Error; err != nil {
+			fmt.Printf("コイン保存失敗 (id=%s): %v\n", coin.ID, err)
+		}
 	}
 
+	fmt.Printf("CoinGecko: %d件のコインを更新しました\n", len(coins))
 	return nil
 }
 
