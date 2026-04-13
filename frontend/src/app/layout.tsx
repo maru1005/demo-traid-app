@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { BottomNav } from "@/components/BottomNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +29,6 @@ export default function RootLayout({
       >
         {/* ボトムナビの高さ分だけ下にパディング */}
         <div className="lg:pb-0 pb-16">{children}</div>
-        <BottomNav />
       </body>
     </html>
   );

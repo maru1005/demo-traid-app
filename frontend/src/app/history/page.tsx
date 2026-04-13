@@ -43,19 +43,10 @@ export default function HistoryPage() {
           </h1>
           <nav className="hidden lg:flex items-center gap-6">
             <Link
-              href="/"
-              className="text-sm font-bold text-gray-400 hover:text-gray-900 transition-colors"
-            >
-              ダッシュボード
-            </Link>
-            <Link
               href="/trade"
               className="text-sm font-bold text-gray-400 hover:text-gray-900 transition-colors"
             >
               トレード
-            </Link>
-            <Link href="/history" className="text-sm font-bold text-indigo-600">
-              履歴
             </Link>
           </nav>
         </div>

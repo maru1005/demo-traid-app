@@ -13,13 +13,14 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		// 認証不要
 		api.GET("/coins", handlers.GetCoins)
-		api.GET("/analyze", handlers.AnalyzeCoin)
 		api.GET("/history", handlers.GetPriceHistory)
 
 		// 認証必要
 		auth := api.Group("/")
 		auth.Use(middleware.AuthRequired())
 		{
+			auth.GET("/analyze", handlers.AnalyzeCoin)
+
 			// ユーザー
 			auth.GET("/user", handlers.GetUser)
 			auth.POST("/user/init", handlers.InitUser)
