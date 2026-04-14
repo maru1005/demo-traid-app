@@ -3,8 +3,10 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Coin, User, HoldingPnL } from "@/types";
 import { apiClient } from "@/lib/apiClient";
+import { supabase } from "@/lib/supabase";
 import { TargetPnLCard } from "@/components/TargetPnLCard";
 import { Onboarding } from "@/components/Onboarding";
 import { TradeForm } from "@/components/TradeForm";
@@ -90,11 +92,15 @@ export default function TradePage() {
       setPageState("trading");
       fetchUser();
       fetchHoldingsPnL();
-    } catch (e) {
-      console.error(e);
+    } catch {
+      toast.error("リセットに失敗しました");
     } finally {
       setResetLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const handleUpdateTarget = async () => {
@@ -108,8 +114,8 @@ export default function TradePage() {
       setNewTarget("");
       setPageState("trading");
       fetchUser();
-    } catch (e) {
-      console.error(e);
+    } catch {
+      toast.error("目標の更新に失敗しました");
     } finally {
       setUpdateTargetLoading(false);
     }
@@ -120,17 +126,6 @@ export default function TradePage() {
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
-    );
-  }
-
-  if (pageState === "onboarding") {
-    return (
-      <Onboarding
-        onComplete={() => {
-          fetchUser();
-          fetchHoldingsPnL();
-        }}
-      />
     );
   }
 
@@ -148,6 +143,12 @@ export default function TradePage() {
             >
               履歴
             </Link>
+            <button
+              onClick={handleLogout}
+              className="text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ログアウト
+            </button>
           </nav>
         </div>
       </header>
@@ -217,6 +218,10 @@ export default function TradePage() {
         {/* 下段：シミュレーター + AI分析（統合、全幅） */}
         <SimulatorWithAnalysis coins={coins} holdings={holdingsPnL} user={user} />
       </main>
+
+      {pageState === "onboarding" && (
+        <Onboarding onComplete={() => { fetchUser(); fetchHoldingsPnL(); }} />
+      )}
 
       {/* 目標再設定モーダル（続けるケース） */}
       {showUpdateTarget && (

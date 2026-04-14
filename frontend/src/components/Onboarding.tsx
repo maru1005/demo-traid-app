@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 
 type Props = {
   onComplete: () => void;
@@ -11,19 +12,17 @@ export const Onboarding = ({ onComplete }: Props) => {
   const [initialBalance, setInitialBalance] = useState("");
   const [targetPnL, setTargetPnL] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleStart = async () => {
     const balance = parseFloat(initialBalance);
     const target = parseFloat(targetPnL);
 
     if (!balance || balance <= 0 || !target || target <= 0) {
-      setError("初期残高と目標損益を正しく入力してください");
+      toast.error("初期残高と目標損益を正しく入力してください");
       return;
     }
 
     setLoading(true);
-    setError("");
 
     try {
       const { apiClient } = await import("@/lib/apiClient");
@@ -33,21 +32,21 @@ export const Onboarding = ({ onComplete }: Props) => {
       });
       onComplete();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "エラーが発生しました");
+      toast.error(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center px-4">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 w-full max-w-md space-y-6">
         <div>
           <h2 className="text-2xl font-black text-gray-900">
-            トレード練習を始めよう
+            デモトレへようこそ
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            初期資金と目標損益を設定してください
+            仮想の資金でトレード練習ができます。初期資金と目標損益を設定してください
           </p>
         </div>
 
@@ -84,8 +83,6 @@ export const Onboarding = ({ onComplete }: Props) => {
             </div>
           </div>
         </div>
-
-        {error && <p className="text-sm text-rose-500 font-bold">{error}</p>}
 
         <button
           onClick={handleStart}

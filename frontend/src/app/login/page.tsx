@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,18 +12,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   const handleSubmit = async () => {
     setLoading(true);
-    setError("");
-    setMessage("");
 
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) {
-        setError(error.message);
+        toast.error(error.message);
       } else {
         router.push("/");
       }
@@ -32,7 +29,7 @@ export default function LoginPage() {
         password,
       });
       if (error) {
-        setError("メールアドレスまたはパスワードが正しくありません");
+        toast.error("メールアドレスまたはパスワードが正しくありません");
       } else {
         router.push("/");
       }
@@ -80,11 +77,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && <p className="text-sm font-bold text-rose-500">{error}</p>}
-          {message && (
-            <p className="text-sm font-bold text-emerald-600">{message}</p>
-          )}
-
           <button
             onClick={handleSubmit}
             disabled={loading}
@@ -102,8 +94,6 @@ export default function LoginPage() {
           <button
             onClick={() => {
               setIsSignUp((v) => !v);
-              setError("");
-              setMessage("");
             }}
             className="ml-1 font-bold text-indigo-600 hover:underline"
           >

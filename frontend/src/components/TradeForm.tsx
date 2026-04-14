@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import {
   LineChart,
   Line,
@@ -34,8 +34,6 @@ export const TradeForm = ({ coins, onTradeComplete }: Props) => {
   const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   const [historyDays, setHistoryDays] = useState<HistoryDays>(1);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
@@ -100,8 +98,6 @@ export const TradeForm = ({ coins, onTradeComplete }: Props) => {
   const handleTrade = async (type: "buy" | "sell") => {
     if (!selectedCoin || !amount) return;
     setLoading(true);
-    setError("");
-    setMessage("");
 
     try {
       const fn = type === "buy" ? apiClient.buy : apiClient.sell;
@@ -111,11 +107,11 @@ export const TradeForm = ({ coins, onTradeComplete }: Props) => {
         amount: parseFloat(amount),
         price: selectedCoin.current_price,
       });
-      setMessage(data.message);
+      toast.success(data.message);
       setAmount("");
       onTradeComplete();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラーが発生しました");
+      toast.error(e instanceof Error ? e.message : "通信エラーが発生しました");
     } finally {
       setLoading(false);
     }
@@ -230,18 +226,6 @@ export const TradeForm = ({ coins, onTradeComplete }: Props) => {
             ¥{estimatedTotal > 0 ? Math.round(estimatedTotal).toLocaleString() : "0"}
           </span>
         </div>
-
-        {error && (
-          <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-center gap-2 text-rose-600">
-            <AlertCircle className="w-4 h-4" />
-            <p className="text-sm font-bold">{error}</p>
-          </div>
-        )}
-        {message && (
-          <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-emerald-600">
-            <p className="text-sm font-bold">{message}</p>
-          </div>
-        )}
 
         <div className="grid grid-cols-2 gap-2">
           <button

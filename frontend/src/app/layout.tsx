@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,6 +30,7 @@ export default function RootLayout({
       >
         {/* ボトムナビの高さ分だけ下にパディング */}
         <div className="lg:pb-0 pb-16">{children}</div>
+        <Toaster richColors position="top-center" />
       </body>
     </html>
   );

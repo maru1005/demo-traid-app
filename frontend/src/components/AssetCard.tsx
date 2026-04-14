@@ -4,6 +4,7 @@
 import { useState, useMemo } from "react";
 import { User, HoldingPnL } from "@/types";
 import { apiClient } from "@/lib/apiClient";
+import { toast } from "sonner";
 
 type Props = {
   user: User | null;
@@ -25,10 +26,15 @@ export const AssetCard = ({ user, holdingsPnL, onDepositComplete }: Props) => {
 
   const handleDeposit = async () => {
     if (!depositAmount) return;
-    await apiClient.deposit({ amount: parseFloat(depositAmount) });
-    setDepositAmount("");
-    setShowDeposit(false);
-    onDepositComplete();
+    try {
+      await apiClient.deposit({ amount: parseFloat(depositAmount) });
+      setDepositAmount("");
+      setShowDeposit(false);
+      onDepositComplete();
+      toast.success("入金しました");
+    } catch {
+      toast.error("入金に失敗しました");
+    }
   };
 
   return (
