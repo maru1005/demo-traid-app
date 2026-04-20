@@ -3,6 +3,8 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import confetti from "canvas-confetti";
 import { toast } from "sonner";
 import { Coin, User, HoldingPnL } from "@/types";
 import { apiClient } from "@/lib/apiClient";
@@ -20,6 +22,8 @@ export default function TradePage() {
   const [coins, setCoins] = useState<Coin[]>([]);
   const [holdingsPnL, setHoldingsPnL] = useState<HoldingPnL[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [showAchievedModal, setShowAchievedModal] = useState(false);
+  const [showSadModal, setShowSadModal] = useState(false);
   // リセットモーダル
   const [showReset, setShowReset] = useState(false);
   const [resetBalance, setResetBalance] = useState("");
@@ -71,8 +75,22 @@ export default function TradePage() {
 
   useEffect(() => {
     if (pageState !== "trading" || !user || user.initial_balance === 0) return;
+
     const isAchieved = totalAssets >= user.total_deposited + user.target_pnl;
-    if (isAchieved) setPageState("achieved");
+    if (isAchieved) {
+      setPageState("achieved");
+      setShowAchievedModal(true);
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ["#fbbf24", "#f59e0b", "#fcd34d", "#ffffff", "#4f46e5"],
+      });
+      return;
+    }
+
+    const isLoss = totalAssets < user.total_deposited;
+    if (isLoss) setShowSadModal(true);
   }, [totalAssets, user, pageState]);
 
   const handleReset = async () => {
@@ -143,6 +161,7 @@ export default function TradePage() {
             >
               履歴
             </Link>
+
             <button
               onClick={handleLogout}
               className="text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
@@ -158,7 +177,8 @@ export default function TradePage() {
         <div className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-4 py-6 text-center space-y-4">
           <p className="text-2xl font-black">🎉 目標達成！</p>
           <p className="text-sm font-bold opacity-90">
-            総資産 ¥{totalAssets.toLocaleString()} で目標を達成しました
+            総資産 ¥{Math.round(totalAssets).toLocaleString()}{" "}
+            で目標を達成しました
           </p>
           <div className="flex justify-center gap-3">
             <button
@@ -216,11 +236,20 @@ export default function TradePage() {
         </div>
 
         {/* 下段：シミュレーター + AI分析（統合、全幅） */}
-        <SimulatorWithAnalysis coins={coins} holdings={holdingsPnL} user={user} />
+        <SimulatorWithAnalysis
+          coins={coins}
+          holdings={holdingsPnL}
+          user={user}
+        />
       </main>
 
       {pageState === "onboarding" && (
-        <Onboarding onComplete={() => { fetchUser(); fetchHoldingsPnL(); }} />
+        <Onboarding
+          onComplete={() => {
+            fetchUser();
+            fetchHoldingsPnL();
+          }}
+        />
       )}
 
       {/* 目標再設定モーダル（続けるケース） */}
@@ -267,6 +296,72 @@ export default function TradePage() {
                 {updateTargetLoading ? "処理中..." : "設定する"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAchievedModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl text-center space-y-4">
+            <Image
+              src="/cats/cat_achieved.png"
+              alt="achieved"
+              width={320}
+              height={213}
+              className="mx-auto object-contain"
+              unoptimized
+            />
+            <div>
+              <h2 className="text-2xl font-black text-gray-900">
+                目標達成！🎉
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                総資産 ¥{Math.round(totalAssets).toLocaleString()}{" "}
+                で目標を達成しました
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAchievedModal(false)}
+              className="w-full py-3 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            >
+              とじる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showSadModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl text-center space-y-4">
+            <Image
+              src="/cats/cat_sad.png"
+              alt="sad"
+              width={320}
+              height={213}
+              className="mx-auto object-contain"
+              unoptimized
+            />
+            <div>
+              <h2 className="text-2xl font-black text-gray-900">損失...</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                総資産 ¥{Math.round(totalAssets).toLocaleString()} になりました
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setShowSadModal(false);
+                setShowReset(true);
+              }}
+              className="w-full py-3 rounded-xl font-black text-white bg-rose-500 hover:bg-rose-600 transition-colors"
+            >
+              リセットして始める
+            </button>
+            <button
+              onClick={() => setShowSadModal(false)}
+              className="w-full py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+            >
+              このまま続ける
+            </button>
           </div>
         </div>
       )}

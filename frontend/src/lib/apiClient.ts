@@ -27,11 +27,21 @@ export const apiUrls = buildApiUrl(API_BASE_URL);
 
 // Supabaseのアクセストークンを取得
 async function getAuthHeader(): Promise<Record<string, string>> {
+  // まずsupabaseのgetSession()を試みる
   const { data } = await supabase.auth.getSession();
-  
-   const token = data.session?.access_token;
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
+  const token = data.session?.access_token;
+  if (token) return { Authorization: `Bearer ${token}` };
+
+  // fallback: クッキーから直接取得
+  const raw = document.cookie.match(/sb-[^=]+=base64-([^;]+)/)?.[1];
+  if (!raw) return {};
+  try {
+    const decoded = JSON.parse(atob(decodeURIComponent(raw)));
+    if (decoded.access_token) return { Authorization: `Bearer ${decoded.access_token}` };
+  } catch {
+    // パース失敗は無視
+  }
+  return {};
 }
 
 async function withDefaultHeaders(init?: RequestInit, auth = false): Promise<RequestInit> {
@@ -72,7 +82,7 @@ export const apiClient = {
     return fetchJson<GetHistoryResponse>(apiUrls.history(params));
   },
   analyze(params: GetAnalyzeParams): Promise<GetAnalyzeResponse> {
-    return fetchJson<GetAnalyzeResponse>(apiUrls.analyze(params));
+    return fetchJson<GetAnalyzeResponse>(apiUrls.analyze(params), {}, true);
   },
 
   // 認証必要

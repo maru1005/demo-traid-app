@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { Coin, HoldingPnL, User } from "@/types";
 import { CoinSelector } from "@/components/CoinSelector";
@@ -35,6 +36,7 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
   const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
   const [amount, setAmount] = useState("");
   const [analysis, setAnalysis] = useState<string>("");
+  const [signal, setSignal] = useState<"BUY" | "SELL" | "HOLD" | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -66,6 +68,7 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
     setSelectedCoin(null);
     setAmount("");
     setAnalysis("");
+    setSignal(null);
     setError("");
   };
 
@@ -73,6 +76,7 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
     setSelectedCoin(coin);
     setAmount("");
     setAnalysis("");
+    setSignal(null);
     setError("");
   };
 
@@ -104,6 +108,7 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
     setLoading(true);
     setError("");
     setAnalysis("");
+    setSignal(null);
 
     const holdingsValue = holdings.reduce(
       (sum, h) => sum + h.current_price * h.amount,
@@ -139,12 +144,20 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
             : undefined,
       });
       setAnalysis(res.analysis);
+      const match = res.analysis.match(/判断:\s*(BUY|SELL|HOLD)/)
+      setSignal((match?.[1] as "BUY" | "SELL" | "HOLD") ?? "HOLD")
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析に失敗しました");
     } finally {
       setLoading(false);
     }
   };
+
+  const getCatImage = (sig: "BUY" | "SELL" | "HOLD") => {
+    if (sig === "BUY") return "/cats/cat_buy.png"
+    if (sig === "SELL") return "/cats/cat_sell.png"
+    return Math.random() < 0.5 ? "/cats/cat_hold_a.png" : "/cats/cat_hold_b.png"
+  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
@@ -274,27 +287,44 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
 
         {/* 右カラム: AI分析 */}
         <div className="flex-1 space-y-3 mt-6 lg:mt-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-bold text-gray-900">AI投資戦略分析</h3>
-            </div>
+          <div className="flex justify-between items-center">
             <button
               onClick={handleAnalyze}
               disabled={!selectedCoin || loading}
-              className={`px-4 py-2 text-sm rounded-xl font-bold flex items-center gap-1.5 transition-all active:scale-[0.98] ${
+              className={`flex items-center gap-2 text-lg font-bold transition-opacity ${
                 selectedCoin && !loading
-                  ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  ? "opacity-100 cursor-pointer hover:opacity-70"
+                  : "opacity-40 cursor-not-allowed"
               }`}
             >
               {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
               ) : (
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-5 h-5 text-indigo-600" />
               )}
-              分析
+              AI投資戦略分析
             </button>
+            {signal && (
+              <div className="flex items-center gap-3">
+                <Image
+                  src={getCatImage(signal)}
+                  alt={signal}
+                  width={64}
+                  height={64}
+                  className="object-contain"
+                  unoptimized
+                />
+                <span className={`text-lg font-black px-3 py-1 rounded-xl ${
+                  signal === "BUY"
+                    ? "bg-emerald-100 text-emerald-600"
+                    : signal === "SELL"
+                    ? "bg-rose-100 text-rose-500"
+                    : "bg-gray-100 text-gray-600"
+                }`}>
+                  {signal}
+                </span>
+              </div>
+            )}
           </div>
 
           {!analysis && !loading && !error && (
@@ -305,7 +335,14 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
 
           {loading && (
             <div className="text-center py-6">
-              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-2" />
+              <Image
+                src="/cats/cat_loading.png"
+                alt="loading"
+                width={120}
+                height={120}
+                className="mx-auto mb-3 object-contain"
+                unoptimized
+              />
               <p className="text-sm font-bold text-gray-500 animate-pulse">
                 AI が市場トレンドを計算中...
               </p>
@@ -343,6 +380,7 @@ export const SimulatorWithAnalysis = ({ holdings, coins, user }: Props) => {
                 <button
                   onClick={() => {
                     setAnalysis("");
+                    setSignal(null);
                     setError("");
                   }}
                   className="text-xs text-gray-400 hover:text-gray-600 font-bold ml-4 flex-shrink-0"
